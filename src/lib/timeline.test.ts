@@ -7,6 +7,7 @@ import {
   sequenceToSourceTime,
   sourceToSequenceTime,
   splitClip,
+  timelineClipClickAction,
   trimClip,
 } from './timeline.ts';
 import type { Clip } from '../types.ts';
@@ -61,4 +62,23 @@ test('moves clips left and right without mutating the input', () => {
   const moved = moveClip(clips, 'b', -1);
   assert.deepEqual(moved.map((clip) => clip.id), ['b', 'a']);
   assert.deepEqual(clips.map((clip) => clip.id), ['a', 'b']);
+});
+
+// Regression: tutorial step 2 must count the normal action of clicking a timeline clip.
+test('clicking a timeline clip in selection mode seeks and selects so tutorial step 2 can complete', () => {
+  assert.deepEqual(timelineClipClickAction('selection', 'a', 2.25), {
+    seekTime: 2.25,
+    tutorialSeek: true,
+    selectClipId: 'a',
+    split: false,
+  });
+});
+
+test('clicking a timeline clip with the razor still seeks before splitting', () => {
+  assert.deepEqual(timelineClipClickAction('razor', 'a', 2.25), {
+    seekTime: 2.25,
+    tutorialSeek: true,
+    selectClipId: null,
+    split: true,
+  });
 });
