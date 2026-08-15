@@ -7,6 +7,9 @@ interface TimelineProps {
   clips: Clip[];
   markers: Marker[];
   sequenceTime: number;
+  sequenceFps: number;
+  sourceDuration: number;
+  audioPeaks: number[] | null;
   selectedClipId: string | null;
   activeTool: 'selection' | 'razor';
   onSeek: (time: number) => void;
@@ -23,10 +26,31 @@ function timeFromPointer(event: MouseEvent<HTMLElement>, duration: number): numb
   return Math.max(0, Math.min(duration, ratio * duration));
 }
 
+function clipAudioPeaks(
+  audioPeaks: number[] | null,
+  clip: Clip,
+  sourceDuration: number,
+  maxBars = 24,
+): number[] {
+  if (!audioPeaks || audioPeaks.length === 0 || sourceDuration <= 0) return [];
+  const start = Math.max(0, Math.min(audioPeaks.length - 1, Math.floor((clip.sourceStart / sourceDuration) * audioPeaks.length)));
+  const end = Math.max(start + 1, Math.min(audioPeaks.length, Math.ceil((clip.sourceEnd / sourceDuration) * audioPeaks.length)));
+  const segment = audioPeaks.slice(start, end);
+  if (segment.length <= maxBars) return segment;
+  return Array.from({ length: maxBars }, (_, index) => {
+    const bucketStart = Math.floor((index * segment.length) / maxBars);
+    const bucketEnd = Math.max(bucketStart + 1, Math.floor(((index + 1) * segment.length) / maxBars));
+    return segment.slice(bucketStart, bucketEnd).reduce((peak, value) => Math.max(peak, value), 0);
+  });
+}
+
 export function Timeline({
   clips,
   markers,
   sequenceTime,
+  sequenceFps,
+  sourceDuration,
+  audioPeaks,
   selectedClipId,
   activeTool,
   onSeek,
@@ -41,7 +65,7 @@ export function Timeline({
   };
 
   const handleRulerKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const step = Math.max(duration / 100, 0.04);
+    const step = 1 / Math.max(1, sequenceFps);
     let next: number | null = null;
 
     if (event.key === 'ArrowLeft') next = sequenceTime - step;
@@ -124,7 +148,7 @@ export function Timeline({
                 const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
                 const localDuration = clip.sourceEnd - clip.sourceStart;
                 const clickTime = start + localDuration * Math.max(0, Math.min(1, ratio));
-                const action = timelineClipClickAction(activeTool, clip.id, clickTime);
+                const action = timelineClipClickAction(activeTool, clip.id, clickTime, sequenceFps);
                 onSeek(action.seekTime);
                 onClipClick(clip.id, action.seekTime);
               }}
@@ -146,13 +170,16 @@ export function Timeline({
           <strong>A1</strong>
         </div>
         <div className="track-lane track-lane--audio" aria-hidden="true">
-          {clipGeometry.map(({ clip, width }) => (
-            <div className="audio-clip" style={{ width: `${width}%` }} key={`audio-${clip.id}`}>
-              {Array.from({ length: 18 }, (_, barIndex) => (
-                <i style={{ height: `${22 + ((barIndex * 13) % 52)}%` }} key={barIndex} />
-              ))}
-            </div>
-          ))}
+          {clipGeometry.map(({ clip, width }) => {
+            const peaks = clipAudioPeaks(audioPeaks, clip, sourceDuration);
+            return (
+              <div className="audio-clip" style={{ width: `${width}%` }} key={`audio-${clip.id}`}>
+                {peaks.map((peak, barIndex) => (
+                  <i style={{ height: `${Math.max(3, peak * 100)}%` }} key={barIndex} />
+                ))}
+              </div>
+            );
+          })}
           <span className="timeline-playhead timeline-playhead--audio" style={{ left: `${playheadLeft}%` }} />
         </div>
       </div>
