@@ -14,6 +14,7 @@ import { getPresetBindings } from './data/shortcuts.ts';
 import { useLocalStorage } from './hooks/useLocalStorage.ts';
 import { downloadBlob, downloadText } from './lib/download.ts';
 import { formatTimecode, parseProject, serializeProject, toEdl } from './lib/export.ts';
+import { validateRelinkSource } from './lib/relink.ts';
 import { renderReviewVideo, reviewExportCapability } from './lib/renderReview.ts';
 import { normalizeShortcut } from './lib/shortcuts.ts';
 import {
@@ -220,11 +221,18 @@ export default function App() {
     if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
 
     const nextSource = sourceMetaFromVideo(video, sourceName);
-    setSource(nextSource);
-    setMediaError(null);
     video.playbackRate = settings.playbackSpeed;
 
     if (relinkingProjectRef.current) {
+      const relinkError = validateRelinkSource(source, nextSource, clips);
+      if (relinkError) {
+        setMediaError(relinkError);
+        setRenderMessage(relinkError);
+        return;
+      }
+
+      setSource(nextSource);
+      setMediaError(null);
       relinkingProjectRef.current = false;
       setExpectedRelinkName(null);
       setSelectedClipId((current) => current ?? clips[0]?.id ?? null);
@@ -232,6 +240,8 @@ export default function App() {
       return;
     }
 
+    setSource(nextSource);
+    setMediaError(null);
     const firstClip: Clip = {
       id: `source-${Date.now()}`,
       name: sourceName,
@@ -251,7 +261,7 @@ export default function App() {
       pendingImportEventRef.current = false;
       emitTutorialEvent('media.imported', { filename: sourceName });
     }
-  }, [clips, emitTutorialEvent, seekSequence, settings.playbackSpeed, sourceName]);
+  }, [clips, emitTutorialEvent, seekSequence, settings.playbackSpeed, source, sourceName]);
 
   const handleMediaError = useCallback(() => {
     stopPlayback();
