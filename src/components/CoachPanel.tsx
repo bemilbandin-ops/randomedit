@@ -5,18 +5,24 @@ import { GuidedTutorialOverlay } from './GuidedTutorialOverlay.tsx';
 interface CoachPanelProps {
   lesson?: TutorialLesson;
   step?: TutorialStep;
+  overlayStep?: TutorialStep;
   lessonNumber: number;
   totalLessons: number;
   courseComplete: boolean;
+  stepComplete: boolean;
+  onNext: () => void;
   onShowMe: (target?: string) => void;
 }
 
 export function CoachPanel({
   lesson,
   step,
+  overlayStep,
   lessonNumber,
   totalLessons,
   courseComplete,
+  stepComplete,
+  onNext,
   onShowMe,
 }: CoachPanelProps) {
   if (courseComplete || !lesson || !step) {
@@ -34,15 +40,18 @@ export function CoachPanel({
   }
 
   const stepNumber = Math.min(lesson.steps.indexOf(step) + 1, lesson.steps.length);
+  const activeOverlayStep = overlayStep ?? step;
 
   return (
     <>
       <GuidedTutorialOverlay
-        step={step}
+        step={activeOverlayStep}
         lessonNumber={lessonNumber}
         totalLessons={totalLessons}
         stepNumber={stepNumber}
         totalSteps={lesson.steps.length}
+        complete={stepComplete}
+        onNext={onNext}
       />
 
       <aside className="coach-panel" aria-live="polite">
@@ -76,7 +85,7 @@ export function CoachPanel({
           </div>
         ) : null}
 
-        <button className="secondary-button coach-show" type="button" onClick={() => onShowMe(step.target)}>
+        <button className="secondary-button coach-show" type="button" onClick={() => onShowMe(activeOverlayStep.target)}>
           Show me where
           <MoveRight size={15} />
         </button>
