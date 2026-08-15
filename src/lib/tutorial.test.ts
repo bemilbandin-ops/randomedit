@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { applyTutorialEvent, type TutorialLesson } from './tutorial.ts';
+import { applyTutorialEvent, continueTutorial, type TutorialLesson } from './tutorial.ts';
 import type { TutorialProgress } from '../types.ts';
 
 const lessons: TutorialLesson[] = [
@@ -25,19 +25,60 @@ test('ignores events that do not match the active interactive step', () => {
   assert.deepEqual(applyTutorialEvent(initial, { type: 'mark.in' }, lessons), initial);
 });
 
-test('advances one step after the required editor action happens', () => {
+test('marks the active step done instead of silently advancing', () => {
   assert.deepEqual(applyTutorialEvent(initial, { type: 'transport.played' }, lessons), {
     lessonIndex: 0,
-    stepIndex: 1,
+    stepIndex: 0,
     completedLessonIds: [],
+    stepComplete: true,
   });
 });
 
-test('completes a lesson and advances to the next lesson', () => {
-  const progress: TutorialProgress = { lessonIndex: 0, stepIndex: 1, completedLessonIds: [] };
-  assert.deepEqual(applyTutorialEvent(progress, { type: 'mark.in' }, lessons), {
+test('ignores repeated editor events after the active step is already done', () => {
+  const done: TutorialProgress = { ...initial, stepComplete: true };
+  assert.deepEqual(applyTutorialEvent(done, { type: 'transport.played' }, lessons), done);
+});
+
+test('next advances one step only after the required action is done', () => {
+  const done: TutorialProgress = { ...initial, stepComplete: true };
+  assert.deepEqual(continueTutorial(done, lessons), {
+    lessonIndex: 0,
+    stepIndex: 1,
+    completedLessonIds: [],
+    stepComplete: false,
+  });
+});
+
+test('next does nothing before the required editor action', () => {
+  assert.deepEqual(continueTutorial(initial, lessons), initial);
+});
+
+test('next completes a lesson and advances to the next lesson', () => {
+  const progress: TutorialProgress = {
+    lessonIndex: 0,
+    stepIndex: 1,
+    completedLessonIds: [],
+    stepComplete: true,
+  };
+  assert.deepEqual(continueTutorial(progress, lessons), {
     lessonIndex: 1,
     stepIndex: 0,
     completedLessonIds: ['transport'],
+    stepComplete: false,
+  });
+});
+
+test('next finishes the final lesson without moving past the course', () => {
+  const progress: TutorialProgress = {
+    lessonIndex: 1,
+    stepIndex: 0,
+    completedLessonIds: ['transport'],
+    stepComplete: true,
+  };
+  assert.deepEqual(continueTutorial(progress, lessons), {
+    lessonIndex: 1,
+    stepIndex: 1,
+    completedLessonIds: ['transport', 'cut'],
+    stepComplete: false,
   });
 });
