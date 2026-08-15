@@ -91,6 +91,7 @@ export function ExportDialog({
             type="button"
             disabled={isDemo || !source || !reviewAvailable || rendering}
             onClick={onRenderReview}
+            data-tutorial-key="render-review"
           >
             {rendering ? 'Rendering…' : 'Render review video'}
           </button>
