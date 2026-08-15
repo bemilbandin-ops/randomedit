@@ -1,0 +1,241 @@
+.guided-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  pointer-events: none;
+}
+
+.guided-dim {
+  position: fixed;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.72);
+  pointer-events: none;
+}
+
+.guided-dim--top {
+  top: 0;
+  right: 0;
+  left: 0;
+}
+
+.guided-dim--bottom {
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.guided-dim--left {
+  left: 0;
+}
+
+.guided-dim--right {
+  right: 0;
+}
+
+.guided-spotlight {
+  position: fixed;
+  z-index: 1001;
+  border: 3px solid var(--accent-strong);
+  border-radius: 9px;
+  background: rgba(219, 160, 77, 0.05);
+  pointer-events: none;
+  transition: top 150ms ease, left 150ms ease, width 150ms ease, height 150ms ease, border-color 150ms ease;
+}
+
+.guided-spotlight::before {
+  position: absolute;
+  top: -11px;
+  left: 14px;
+  padding: 3px 7px;
+  border: 1px solid #74572f;
+  border-radius: 999px;
+  color: #20170d;
+  background: var(--accent-strong);
+  content: "CLICK / USE THIS";
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.guided-spotlight--done {
+  border-color: var(--good);
+  background: rgba(141, 168, 122, 0.06);
+}
+
+.guided-spotlight--done::before {
+  border-color: #4d6740;
+  color: #10150e;
+  background: var(--good);
+  content: "DONE";
+}
+
+.guided-card {
+  position: fixed;
+  z-index: 1002;
+  max-height: calc(100vh - 32px);
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid #6a5332;
+  border-radius: 10px;
+  color: var(--text);
+  background: #151611;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+
+.guided-card--done {
+  border-color: #516746;
+}
+
+.guided-card__eyeline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+  color: #8d8a7f;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.guided-card__heading {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.guided-card__icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid #765932;
+  border-radius: 7px;
+  color: var(--accent-strong);
+  background: #2b2217;
+}
+
+.guided-card--done .guided-card__icon {
+  border-color: #536d47;
+  color: #a9c795;
+  background: #202a1d;
+}
+
+.guided-card__heading small {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--accent-strong);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.guided-card--done .guided-card__heading small {
+  color: #a9c795;
+}
+
+.guided-card h2 {
+  margin: 0;
+  color: #f5f0e4;
+  font-size: 19px;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.guided-card__body {
+  margin: 14px 0 0;
+  color: #d4d0c5;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.guided-term {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 10px 11px;
+  border-left: 3px solid var(--accent);
+  color: #c7c2b7;
+  background: #211d15;
+}
+
+.guided-term strong {
+  color: #f0d6a4;
+  font-size: 11px;
+}
+
+.guided-term span {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.guided-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 13px;
+  padding-top: 11px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.guided-card__waiting {
+  margin: 13px 0 0;
+  color: #8f8c82;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.guided-next {
+  display: flex;
+  width: 100%;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 15px;
+  border: 1px solid #75582f;
+  border-radius: 7px;
+  color: #1d160d;
+  background: var(--accent-strong);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.guided-next:hover {
+  background: #f4c67e;
+}
+
+.guided-next:focus-visible {
+  outline: 2px solid #fff1d4;
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .guided-card {
+    right: 12px !important;
+    bottom: 12px !important;
+    left: 12px !important;
+    top: auto !important;
+    width: auto !important;
+    max-height: 42vh;
+  }
+
+  .guided-card__body {
+    font-size: 12px;
+  }
+
+  .guided-spotlight::before {
+    left: 6px;
+    font-size: 7px;
+  }
+}
