@@ -25,6 +25,12 @@ async function click(element: Element): Promise<void> {
   });
 }
 
+async function clickAt(element: Element, clientX: number): Promise<void> {
+  await act(async () => {
+    element.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX }));
+  });
+}
+
 async function changeSelect(select: HTMLSelectElement, value: string): Promise<void> {
   await act(async () => {
     select.value = value;
@@ -83,6 +89,17 @@ describe('guided tutorial integration', () => {
     setProgress(progress);
     await act(async () => {
       root.render(<App />);
+    });
+  }
+
+  async function loadDemoMetadata(duration = 10): Promise<void> {
+    const video = document.querySelector('video') as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    Object.defineProperty(video!, 'duration', { configurable: true, value: duration });
+    Object.defineProperty(video!, 'videoWidth', { configurable: true, value: 1920 });
+    Object.defineProperty(video!, 'videoHeight', { configurable: true, value: 1080 });
+    await act(async () => {
+      video!.dispatchEvent(new Event('loadedmetadata'));
     });
   }
 
@@ -183,6 +200,54 @@ describe('guided tutorial integration', () => {
     expect(document.querySelector('.source-range')?.textContent).toContain('OUT --');
   });
 
+  it('applies the marked In/Out range as a real tutorial edit', async () => {
+    await renderApp({ lessonIndex: 3, stepIndex: 0, completedLessonIds: completedBefore(3), stepComplete: false });
+    await loadDemoMetadata(10);
+
+    await click(document.querySelector('[data-tutorial-key="mark-in"]')!);
+    await click(document.querySelector('.guided-next')!);
+
+    const ruler = document.querySelector('[data-tutorial-key="timeline-ruler"]');
+    expect(ruler).not.toBeNull();
+    await clickAt(ruler!, 300);
+    await click(document.querySelector('[data-tutorial-key="mark-out"]')!);
+    expect(document.querySelector('.guided-next')).not.toBeNull();
+    await click(document.querySelector('.guided-next')!);
+
+    const applyRange = document.querySelector('[data-tutorial-key="apply-range"]') as HTMLButtonElement | null;
+    expect(applyRange).not.toBeNull();
+    expect(applyRange?.disabled).toBe(false);
+    await click(applyRange!);
+    expect(document.querySelector('.guided-next')).not.toBeNull();
+    expect(document.querySelector('.timeline-clip')?.getAttribute('title')).toContain('0.00s–5.00s');
+  });
+
+  it('splits the clip under the playhead even when no clip remains selected', async () => {
+    await renderApp({
+      lessonIndex: lessons.length - 1,
+      stepIndex: lessons[lessons.length - 1].steps.length,
+      completedLessonIds: lessons.map((lesson) => lesson.id),
+      stepComplete: false,
+    });
+    await loadDemoMetadata(10);
+
+    const ruler = document.querySelector('[data-tutorial-key="timeline-ruler"]');
+    const split = document.querySelector('[data-tutorial-key="split-clip"]') as HTMLButtonElement | null;
+    expect(ruler).not.toBeNull();
+    expect(split).not.toBeNull();
+
+    await clickAt(ruler!, 300);
+    expect(split?.disabled).toBe(false);
+    await click(split!);
+    expect(document.querySelectorAll('.timeline-clip')).toHaveLength(2);
+
+    const splitAfterSelectionCleared = document.querySelector('[data-tutorial-key="split-clip"]') as HTMLButtonElement | null;
+    await clickAt(ruler!, 200);
+    expect(splitAfterSelectionCleared?.disabled).toBe(false);
+    await click(splitAfterSelectionCleared!);
+    expect(document.querySelectorAll('.timeline-clip')).toHaveLength(3);
+  });
+
   it('does not lock unrelated controls when a tutorial target is missing', async () => {
     const otherClick = vi.fn();
     const step: TutorialStep = {
@@ -264,6 +329,7 @@ describe('guided tutorial integration', () => {
     expect(downloadEdl).not.toBeNull();
     await click(downloadEdl!);
     const nextAfterEdl = document.querySelector('.guided-next');
+    expect(downloadEdl).not.toBeNull();
     expect(nextAfterEdl).not.toBeNull();
     await click(nextAfterEdl!);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
