@@ -35,6 +35,7 @@ export interface TutorialProgress {
   lessonIndex: number;
   stepIndex: number;
   completedLessonIds: string[];
+  stepComplete?: boolean;
 }
 
 export interface TutorialEvent {
