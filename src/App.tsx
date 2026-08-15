@@ -71,7 +71,15 @@ function getOverlayStep(step: TutorialStep | undefined, openDialog: DialogName):
     return {
       ...step,
       target: 'download-project',
-      simpleBody: 'Click the highlighted Download project button. This saves your edit decisions as a portable project file.',
+      simpleBody: 'Click the highlighted Download project button. This saves your edit decisions as a portable JSON project file.',
+    };
+  }
+
+  if (step.id === 'export-edl' && openDialog === 'export') {
+    return {
+      ...step,
+      target: 'download-edl',
+      simpleBody: 'Click the highlighted Download .edl button. The EDL is a separate text handoff file from the project JSON.',
     };
   }
 
@@ -166,7 +174,7 @@ export default function App() {
   const handleTutorialNext = useCallback(() => {
     if (
       (currentStep?.id === 'settings' && openDialog === 'settings')
-      || (currentStep?.id === 'export-project' && openDialog === 'export')
+      || ((currentStep?.id === 'export-project' || currentStep?.id === 'export-edl') && openDialog === 'export')
     ) {
       setOpenDialog(null);
     }
@@ -596,7 +604,8 @@ export default function App() {
 
   const handleDownloadEdl = useCallback(() => {
     downloadText(toEdl(projectSnapshot()), `${cleanFilename(projectName)}.edl`);
-  }, [projectName, projectSnapshot]);
+    emitTutorialEvent('edl.exported');
+  }, [emitTutorialEvent, projectName, projectSnapshot]);
 
   const handleImportProject = useCallback(async (file: File) => {
     try {
