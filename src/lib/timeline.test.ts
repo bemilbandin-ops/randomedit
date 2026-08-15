@@ -4,6 +4,7 @@ import {
   moveClip,
   rippleDeleteClip,
   sequenceDuration,
+  sequenceTimeAfterEdit,
   sequenceToSourceTime,
   sourceToSequenceTime,
   splitClip,
@@ -62,6 +63,22 @@ test('moves clips left and right without mutating the input', () => {
   const moved = moveClip(clips, 'b', -1);
   assert.deepEqual(moved.map((clip) => clip.id), ['b', 'a']);
   assert.deepEqual(clips.map((clip) => clip.id), ['a', 'b']);
+});
+
+test('keeps the same source frame under the playhead after trimming a clip start', () => {
+  const before: Clip[] = [{ id: 'a', name: 'Shot A', sourceStart: 0, sourceEnd: 10 }];
+  const after = trimClip(before, 'a', 'start', 5);
+  assert.equal(sequenceTimeAfterEdit(before, 5, after), 0);
+});
+
+test('keeps the same source frame under the playhead after reordering clips', () => {
+  const after = moveClip(clips, 'b', -1);
+  assert.equal(sequenceTimeAfterEdit(clips, 5, after), 1);
+});
+
+test('falls back to a valid clamped sequence time if the active source segment was deleted', () => {
+  const after = rippleDeleteClip(clips, 'b');
+  assert.equal(sequenceTimeAfterEdit(clips, 6, after), 4);
 });
 
 // Regression: tutorial step 2 must count the normal action of clicking a timeline clip.
