@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { parseProject, serializeProject, toEdl } from './export';
-import type { ProjectState } from '../types';
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { parseProject, serializeProject, toEdl } from './export.ts';
+import type { ProjectState } from '../types.ts';
 
 const project: ProjectState = {
   version: 1,
@@ -23,21 +24,19 @@ const project: ProjectState = {
   tutorial: { lessonIndex: 0, stepIndex: 1, completedLessonIds: [] },
 };
 
-describe('project export', () => {
-  it('round trips a project through JSON', () => {
-    expect(parseProject(serializeProject(project))).toEqual(project);
-  });
+test('round trips a project through JSON', () => {
+  assert.deepEqual(parseProject(serializeProject(project)), project);
+});
 
-  it('rejects unsupported project versions', () => {
-    expect(() => parseProject('{"version":2,"name":"old"}')).toThrow(/version/i);
-  });
+test('rejects unsupported project versions', () => {
+  assert.throws(() => parseProject('{"version":2,"name":"old"}'), /version/i);
+});
 
-  it('writes an ordered CMX-style EDL with source and record timecodes', () => {
-    const edl = toEdl(project);
-    expect(edl).toContain('TITLE: Practice Cut');
-    expect(edl).toContain('001  AX       V     C');
-    expect(edl).toContain('00:00:01:00 00:00:03:00 00:00:00:00 00:00:02:00');
-    expect(edl).toContain('002  AX       V     C');
-    expect(edl).toContain('00:00:05:00 00:00:08:00 00:00:02:00 00:00:05:00');
-  });
+test('writes an ordered CMX-style EDL with source and record timecodes', () => {
+  const edl = toEdl(project);
+  assert.match(edl, /TITLE: Practice Cut/);
+  assert.match(edl, /001  AX       V     C/);
+  assert.match(edl, /00:00:01:00 00:00:03:00 00:00:00:00 00:00:02:00/);
+  assert.match(edl, /002  AX       V     C/);
+  assert.match(edl, /00:00:05:00 00:00:08:00 00:00:02:00 00:00:05:00/);
 });
