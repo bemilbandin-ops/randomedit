@@ -90,6 +90,21 @@ async function connectDebugger(url) {
   };
 }
 
+async function stopChrome(processHandle) {
+  if (processHandle.exitCode !== null) return;
+  processHandle.kill('SIGTERM');
+  await Promise.race([
+    new Promise((resolve) => processHandle.once('exit', resolve)),
+    delay(2000),
+  ]);
+  if (processHandle.exitCode !== null) return;
+  processHandle.kill('SIGKILL');
+  await Promise.race([
+    new Promise((resolve) => processHandle.once('exit', resolve)),
+    delay(2000),
+  ]);
+}
+
 const expression = String.raw`(async () => {
   const canvas = document.createElement('canvas');
   canvas.width = 96;
@@ -184,11 +199,10 @@ try {
 } catch (error) {
   throw new Error(`${error instanceof Error ? error.message : String(error)}\n${stderr}`);
 } finally {
-  processHandle.kill('SIGTERM');
-  await Promise.race([
-    new Promise((resolve) => processHandle.once('exit', resolve)),
-    delay(2000),
-  ]);
-  if (processHandle.exitCode === null) processHandle.kill('SIGKILL');
-  rmSync(directory, { recursive: true, force: true });
+  await stopChrome(processHandle);
+  try {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch (error) {
+    console.warn(`Could not fully remove temporary Chrome profile: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
