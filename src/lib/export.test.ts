@@ -4,7 +4,7 @@ import { formatTimecode, parseProject, serializeProject, toEdl } from './export.
 import type { ProjectState } from '../types.ts';
 
 const project: ProjectState = {
-  version: 1,
+  version: 2,
   name: 'Practice Cut',
   source: { name: 'practice.mp4', duration: 12, width: 1920, height: 1080 },
   clips: [
@@ -20,11 +20,24 @@ const project: ProjectState = {
     exportFormat: 'webm',
   },
   shortcutProfile: 'premiere',
+  shortcutBaseProfile: 'premiere',
   shortcutBindings: { playPause: 'Space' },
   tutorial: { lessonIndex: 0, stepIndex: 1, completedLessonIds: [] },
 };
 
-test('round trips a project through JSON', () => {
+const legacyProject = {
+  version: 1,
+  name: project.name,
+  source: project.source,
+  clips: project.clips,
+  markers: project.markers,
+  settings: project.settings,
+  shortcutProfile: project.shortcutProfile,
+  shortcutBindings: project.shortcutBindings,
+  tutorial: project.tutorial,
+};
+
+test('round trips a current project through JSON', () => {
   assert.deepEqual(parseProject(serializeProject(project)), project);
 });
 
@@ -64,13 +77,13 @@ test('rejects invalid source metadata', () => {
 });
 
 test('migrates a version 1 project to the current project model with a reset base preset', () => {
-  const parsed = parseProject(JSON.stringify(project)) as ProjectState & { shortcutBaseProfile?: string };
+  const parsed = parseProject(JSON.stringify(legacyProject));
   assert.equal(parsed.version, 2);
   assert.equal(parsed.shortcutBaseProfile, 'premiere');
 });
 
 test('preserves source identity and handoff metadata while parsing project JSON', () => {
-  const enriched = {
+  const enriched: ProjectState = {
     ...project,
     source: {
       ...project.source!,
@@ -81,14 +94,12 @@ test('preserves source identity and handoff metadata while parsing project JSON'
       reel: 'CAM001',
     },
   };
-  const parsed = parseProject(JSON.stringify(enriched)) as ProjectState & {
-    source: NonNullable<ProjectState['source']> & Record<string, unknown>;
-  };
-  assert.equal(parsed.source.fileSize, 123456);
-  assert.equal(parsed.source.fingerprint, 'sha256:abc123');
-  assert.equal(parsed.source.sourceFps, 25);
-  assert.equal(parsed.source.startTimecode, '01:00:00:00');
-  assert.equal(parsed.source.reel, 'CAM001');
+  const parsed = parseProject(JSON.stringify(enriched));
+  assert.equal(parsed.source?.fileSize, 123456);
+  assert.equal(parsed.source?.fingerprint, 'sha256:abc123');
+  assert.equal(parsed.source?.sourceFps, 25);
+  assert.equal(parsed.source?.startTimecode, '01:00:00:00');
+  assert.equal(parsed.source?.reel, 'CAM001');
 });
 
 test('writes an ordered CMX-style EDL with source and record timecodes', () => {
@@ -101,7 +112,7 @@ test('writes an ordered CMX-style EDL with source and record timecodes', () => {
 });
 
 test('uses source reel and start-timecode metadata in EDL source timecodes', () => {
-  const metadataProject = {
+  const metadataProject: ProjectState = {
     ...project,
     source: {
       ...project.source!,
@@ -109,7 +120,7 @@ test('uses source reel and start-timecode metadata in EDL source timecodes', () 
       startTimecode: '01:00:00:00',
       reel: 'CAM001',
     },
-  } as ProjectState;
+  };
   const edl = toEdl(metadataProject);
   assert.match(edl, /001  CAM001   V     C/);
   assert.match(edl, /01:00:01:00 01:00:03:00 00:00:00:00 00:00:02:00/);
