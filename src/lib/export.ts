@@ -3,6 +3,7 @@ import type {
   EditorSettings,
   Marker,
   ProjectState,
+  ShortcutBaseProfile,
   ShortcutBindings,
   ShortcutProfile,
   SourceMeta,
@@ -29,6 +30,24 @@ function invalid(detail: string): never {
   throw new Error(`Invalid project file: ${detail}.`);
 }
 
+function optionalPositiveNumber(value: unknown, detail: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!isFiniteNumber(value) || value <= 0) invalid(detail);
+  return value;
+}
+
+function optionalNonNegativeInteger(value: unknown, detail: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!isNonNegativeInteger(value)) invalid(detail);
+  return value;
+}
+
+function optionalNonEmptyString(value: unknown, detail: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.trim().length === 0) invalid(detail);
+  return value;
+}
+
 function parseSource(value: unknown): SourceMeta | null {
   if (value === null) return null;
   if (!isRecord(value)) invalid('source metadata is malformed');
@@ -40,11 +59,27 @@ function parseSource(value: unknown): SourceMeta | null {
   ) {
     invalid('source metadata is malformed');
   }
+
+  const fileSize = optionalNonNegativeInteger(value.fileSize, 'source file size is malformed');
+  const fingerprint = optionalNonEmptyString(value.fingerprint, 'source fingerprint is malformed');
+  const sourceFps = optionalPositiveNumber(value.sourceFps, 'source frame rate is malformed');
+  const startTimecode = optionalNonEmptyString(value.startTimecode, 'source start timecode is malformed');
+  const reel = optionalNonEmptyString(value.reel, 'source reel is malformed');
+
+  if (startTimecode && !/^\d{2,}:\d{2}:\d{2}:\d{2}$/.test(startTimecode)) {
+    invalid('source start timecode is malformed');
+  }
+
   return {
     name: value.name,
     duration: value.duration,
     width: value.width,
     height: value.height,
+    ...(fileSize === undefined ? {} : { fileSize }),
+    ...(fingerprint === undefined ? {} : { fingerprint }),
+    ...(sourceFps === undefined ? {} : { sourceFps }),
+    ...(startTimecode === undefined ? {} : { startTimecode }),
+    ...(reel === undefined ? {} : { reel }),
   };
 }
 
@@ -113,6 +148,13 @@ function parseShortcutProfile(value: unknown): ShortcutProfile {
   return value;
 }
 
+function parseShortcutBaseProfile(value: unknown): ShortcutBaseProfile {
+  if (value !== 'premiere' && value !== 'resolve') {
+    invalid('shortcut base profile is malformed');
+  }
+  return value;
+}
+
 function parseShortcutBindings(value: unknown): ShortcutBindings {
   if (!isRecord(value)) invalid('shortcut bindings are missing or malformed');
   const entries = Object.entries(value);
@@ -145,7 +187,7 @@ export function parseProject(json: string): ProjectState {
   const value: unknown = JSON.parse(json);
   if (!isRecord(value)) invalid('root value is malformed');
 
-  if (value.version !== 1) {
+  if (value.version !== 1 && value.version !== 2) {
     throw new Error(`Unsupported project version: ${String(value.version ?? 'missing')}`);
   }
   if (typeof value.name !== 'string') invalid('project name is missing');
@@ -158,15 +200,22 @@ export function parseProject(json: string): ProjectState {
     : Array.isArray(value.markers)
       ? value.markers.map(parseMarker)
       : invalid('markers are malformed');
+  const shortcutProfile = parseShortcutProfile(value.shortcutProfile);
+  const shortcutBaseProfile = value.version === 2
+    ? parseShortcutBaseProfile(value.shortcutBaseProfile)
+    : shortcutProfile === 'resolve'
+      ? 'resolve'
+      : 'premiere';
 
   return {
-    version: 1,
+    version: 2,
     name: value.name,
     source,
     clips,
     markers,
     settings: parseSettings(value.settings),
-    shortcutProfile: parseShortcutProfile(value.shortcutProfile),
+    shortcutProfile,
+    shortcutBaseProfile,
     shortcutBindings: parseShortcutBindings(value.shortcutBindings),
     tutorial: parseTutorial(value.tutorial),
   };
@@ -188,21 +237,40 @@ export function formatTimecode(seconds: number, fpsValue: number): string {
     .join(':');
 }
 
+function timecodeToSeconds(timecode: string | undefined, fpsValue: number): number {
+  if (!timecode) return 0;
+  const match = /^(\d{2,}):(\d{2}):(\d{2}):(\d{2})$/.exec(timecode);
+  if (!match) return 0;
+  const [, hours, minutes, seconds, frames] = match.map(Number);
+  const nominalFps = Math.max(1, Math.round(fpsValue));
+  return hours * 3600 + minutes * 60 + seconds + frames / nominalFps;
+}
+
+function sanitizeReel(value: string | undefined): string {
+  const clean = (value ?? 'AX').toUpperCase().replace(/[^A-Z0-9_-]+/g, '').slice(0, 8);
+  return clean || 'AX';
+}
+
 export function toEdl(project: ProjectState): string {
-  const fps = project.settings.sequenceFps;
+  const sequenceFps = project.settings.sequenceFps;
+  const sourceFps = project.source?.sourceFps ?? sequenceFps;
+  const sourceTimecodeOffset = timecodeToSeconds(project.source?.startTimecode, sourceFps);
+  const reel = sanitizeReel(project.source?.reel).padEnd(8, ' ');
   let recordTime = 0;
   const lines = [`TITLE: ${project.name}`, 'FCM: NON-DROP FRAME', ''];
 
   project.clips.forEach((clip, index) => {
     const duration = Math.max(0, clip.sourceEnd - clip.sourceStart);
     const event = String(index + 1).padStart(3, '0');
-    const sourceIn = formatTimecode(clip.sourceStart, fps);
-    const sourceOut = formatTimecode(clip.sourceEnd, fps);
-    const recordIn = formatTimecode(recordTime, fps);
-    const recordOut = formatTimecode(recordTime + duration, fps);
+    const sourceIn = formatTimecode(sourceTimecodeOffset + clip.sourceStart, sourceFps);
+    const sourceOut = formatTimecode(sourceTimecodeOffset + clip.sourceEnd, sourceFps);
+    const recordIn = formatTimecode(recordTime, sequenceFps);
+    const recordOut = formatTimecode(recordTime + duration, sequenceFps);
 
-    lines.push(`${event}  AX       V     C        ${sourceIn} ${sourceOut} ${recordIn} ${recordOut}`);
+    lines.push(`${event}  ${reel} V     C        ${sourceIn} ${sourceOut} ${recordIn} ${recordOut}`);
     lines.push(`* FROM CLIP NAME: ${clip.name}`);
+    if (project.source?.sourceFps) lines.push(`* SOURCE FPS: ${project.source.sourceFps}`);
+    if (project.source?.startTimecode) lines.push(`* SOURCE START TC: ${project.source.startTimecode}`);
     lines.push('');
     recordTime += duration;
   });
