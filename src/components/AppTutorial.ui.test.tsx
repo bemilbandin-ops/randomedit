@@ -3,7 +3,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App.tsx';
 import { lessons } from '../data/lessons.ts';
+import type { TutorialStep } from '../lib/tutorial.ts';
 import type { TutorialProgress } from '../types.ts';
+import { GuidedTutorialOverlay } from './GuidedTutorialOverlay.tsx';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -138,6 +140,56 @@ describe('guided tutorial integration', () => {
     expect(showMe).toBeDefined();
     await click(showMe!);
     expect(document.querySelector('[data-tutorial-key="play-toggle"]')?.classList.contains('tutorial-pulse')).toBe(true);
+  });
+
+  it('freezes unrelated keyboard commands after Done until Next', async () => {
+    await renderApp({ lessonIndex: 0, stepIndex: 0, completedLessonIds: [], stepComplete: true });
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
+    });
+
+    expect(document.querySelector('.statusbar')?.textContent).toContain('Selection tool');
+    expect(document.querySelector('.guided-next')).not.toBeNull();
+  });
+
+  it('freezes the completed highlighted target itself until Next', async () => {
+    const targetClick = vi.fn();
+    const onNext = vi.fn();
+    const step: TutorialStep = {
+      id: 'destructive-example',
+      title: 'Do it once',
+      body: 'Perform this action once.',
+      requiredEvent: 'clip.split',
+      target: 'destructive-target',
+    };
+
+    await act(async () => {
+      root.render(
+        <>
+          <button type="button" data-tutorial-key="destructive-target" onClick={targetClick}>Dangerous action</button>
+          <GuidedTutorialOverlay
+            step={step}
+            lessonNumber={1}
+            totalLessons={1}
+            stepNumber={1}
+            totalSteps={1}
+            complete
+            onNext={onNext}
+          />
+        </>,
+      );
+    });
+
+    const target = document.querySelector('[data-tutorial-key="destructive-target"]');
+    expect(target).not.toBeNull();
+    await click(target!);
+    expect(targetClick).not.toHaveBeenCalled();
+
+    const next = document.querySelector('.guided-next');
+    expect(next).not.toBeNull();
+    await click(next!);
+    expect(onNext).toHaveBeenCalledTimes(1);
   });
 
   it('guides Settings inside the modal, closes it on Next, then guides the actual project download', async () => {
