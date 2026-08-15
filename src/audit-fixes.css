@@ -1,0 +1,13 @@
+/* Audit follow-up overrides. Loaded after styles.css so timeline percentages remain authoritative. */
+.timeline-clip,
+.audio-clip {
+  min-width: 0;
+}
+
+.timeline-clip > span,
+.timeline-clip > small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
