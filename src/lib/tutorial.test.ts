@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { applyTutorialEvent, type TutorialLesson } from './tutorial';
-import type { TutorialProgress } from '../types';
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { applyTutorialEvent, type TutorialLesson } from './tutorial.ts';
+import type { TutorialProgress } from '../types.ts';
 
 const lessons: TutorialLesson[] = [
   {
@@ -20,25 +21,23 @@ const lessons: TutorialLesson[] = [
 
 const initial: TutorialProgress = { lessonIndex: 0, stepIndex: 0, completedLessonIds: [] };
 
-describe('tutorial event progression', () => {
-  it('ignores events that do not match the active interactive step', () => {
-    expect(applyTutorialEvent(initial, { type: 'mark.in' }, lessons)).toEqual(initial);
-  });
+test('ignores events that do not match the active interactive step', () => {
+  assert.deepEqual(applyTutorialEvent(initial, { type: 'mark.in' }, lessons), initial);
+});
 
-  it('advances one step after the required editor action happens', () => {
-    expect(applyTutorialEvent(initial, { type: 'transport.played' }, lessons)).toEqual({
-      lessonIndex: 0,
-      stepIndex: 1,
-      completedLessonIds: [],
-    });
+test('advances one step after the required editor action happens', () => {
+  assert.deepEqual(applyTutorialEvent(initial, { type: 'transport.played' }, lessons), {
+    lessonIndex: 0,
+    stepIndex: 1,
+    completedLessonIds: [],
   });
+});
 
-  it('completes a lesson and advances to the next lesson', () => {
-    const progress: TutorialProgress = { lessonIndex: 0, stepIndex: 1, completedLessonIds: [] };
-    expect(applyTutorialEvent(progress, { type: 'mark.in' }, lessons)).toEqual({
-      lessonIndex: 1,
-      stepIndex: 0,
-      completedLessonIds: ['transport'],
-    });
+test('completes a lesson and advances to the next lesson', () => {
+  const progress: TutorialProgress = { lessonIndex: 0, stepIndex: 1, completedLessonIds: [] };
+  assert.deepEqual(applyTutorialEvent(progress, { type: 'mark.in' }, lessons), {
+    lessonIndex: 1,
+    stepIndex: 0,
+    completedLessonIds: ['transport'],
   });
 });
