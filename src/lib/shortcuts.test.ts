@@ -9,6 +9,13 @@ test('normalizes common key combinations', () => {
   assert.equal(normalizeShortcut({ key: 'ArrowLeft', ctrlKey: false, metaKey: false, altKey: false, shiftKey: true }), 'Shift+ArrowLeft');
 });
 
+test('does not create shortcuts from a modifier key by itself', () => {
+  assert.equal(normalizeShortcut({ key: 'Control', ctrlKey: true, metaKey: false, altKey: false, shiftKey: false }), '');
+  assert.equal(normalizeShortcut({ key: 'Meta', ctrlKey: false, metaKey: true, altKey: false, shiftKey: false }), '');
+  assert.equal(normalizeShortcut({ key: 'Alt', ctrlKey: false, metaKey: false, altKey: true, shiftKey: false }), '');
+  assert.equal(normalizeShortcut({ key: 'Shift', ctrlKey: false, metaKey: false, altKey: false, shiftKey: true }), '');
+});
+
 test('finds an existing binding owned by another command', () => {
   const bindings: ShortcutBindings = {
     addEdit: 'Ctrl+K',
