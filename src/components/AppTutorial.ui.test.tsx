@@ -271,7 +271,7 @@ describe('guided tutorial integration', () => {
     expect(document.activeElement).toBe(settings);
   });
 
-  it('guides Settings inside the modal, closes it on Next, then guides the actual project download', async () => {
+  it('requires separate project JSON and EDL downloads before completing handoff', async () => {
     await renderApp({
       lessonIndex: 6,
       stepIndex: 0,
@@ -285,11 +285,6 @@ describe('guided tutorial integration', () => {
 
     const settingsOptions = document.querySelector('[data-tutorial-key="settings-options"]');
     expect(settingsOptions).not.toBeNull();
-
-    const showMe = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('Show me where'));
-    expect(showMe).toBeDefined();
-    await click(showMe!);
-    expect(settingsOptions?.classList.contains('tutorial-pulse')).toBe(true);
 
     const speed = settingsOptions!.querySelector('select') as HTMLSelectElement | null;
     expect(speed).not.toBeNull();
@@ -308,9 +303,24 @@ describe('guided tutorial integration', () => {
     expect(downloadProject).not.toBeNull();
     await click(downloadProject!);
 
-    const nextAfterExport = document.querySelector('.guided-next');
-    expect(nextAfterExport).not.toBeNull();
-    await click(nextAfterExport!);
+    const nextAfterProject = document.querySelector('.guided-next');
+    expect(nextAfterProject).not.toBeNull();
+    await click(nextAfterProject!);
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.body.textContent).not.toContain('Foundation complete');
+
+    const exportAgain = document.querySelector('[data-tutorial-key="export-project"]');
+    expect(exportAgain).not.toBeNull();
+    await click(exportAgain!);
+
+    const downloadEdl = document.querySelector('[data-tutorial-key="download-edl"]');
+    expect(downloadEdl).not.toBeNull();
+    await click(downloadEdl!);
+
+    const nextAfterEdl = document.querySelector('.guided-next');
+    expect(nextAfterEdl).not.toBeNull();
+    await click(nextAfterEdl!);
 
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.body.textContent).toContain('Foundation complete');
