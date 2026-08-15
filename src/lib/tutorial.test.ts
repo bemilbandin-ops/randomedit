@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { lessons as courseLessons } from '../data/lessons.ts';
 import { applyTutorialEvent, continueTutorial, type TutorialLesson } from './tutorial.ts';
 import type { TutorialProgress } from '../types.ts';
 
@@ -81,4 +82,12 @@ test('next finishes the final lesson without moving past the course', () => {
     completedLessonIds: ['transport', 'cut'],
     stepComplete: false,
   });
+});
+
+test('the real final lesson includes a review-video handoff check before project files', () => {
+  const finalLesson = courseLessons[courseLessons.length - 1];
+  const reviewStep = finalLesson.steps.find((step) => step.id === 'review-video');
+  assert.equal(reviewStep?.requiredEvent, 'review.checked');
+  assert.equal(finalLesson.steps.some((step) => step.requiredEvent === 'project.exported'), true);
+  assert.equal(finalLesson.steps.some((step) => step.requiredEvent === 'edl.exported'), true);
 });
