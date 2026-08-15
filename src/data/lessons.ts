@@ -205,7 +205,7 @@ export const lessons: TutorialLesson[] = [
   {
     id: 'review-handoff',
     title: 'Review and hand off',
-    description: 'Set delivery and source metadata, then export the editable project plus its EDL handoff.',
+    description: 'Set delivery/source metadata, check or render a review copy, then export the project and EDL.',
     steps: [
       {
         id: 'settings',
@@ -216,6 +216,16 @@ export const lessons: TutorialLesson[] = [
         target: 'settings',
         professionalName: 'Sequence / Deliver Settings',
         transferNote: 'Frame rate, export settings and source timecode metadata are separate decisions in professional software too.',
+      },
+      {
+        id: 'review-video',
+        title: 'Check the review video handoff',
+        body: 'Open Export. If this browser supports canvas capture and MediaRecorder, render the review video. If it does not, Random Edit will show the limitation and let the tutorial continue without pretending a file was rendered.',
+        simpleBody: 'Open Export. Render the review copy when the highlighted button is available. If your browser cannot record it, the app explains why and this check still completes.',
+        requiredEvent: 'review.checked',
+        target: 'export-project',
+        professionalName: 'Review Export',
+        transferNote: 'Review movies are convenient viewing copies. They are separate from editable project and EDL handoff files.',
       },
       {
         id: 'export-project',
