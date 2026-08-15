@@ -39,6 +39,8 @@ export function VideoMonitor({
   onEnded,
   onError,
 }: VideoMonitorProps) {
+  const validMarkOut = markIn !== null && markOut !== null && markOut > markIn ? markOut : null;
+
   return (
     <section className="monitor-panel" aria-label="Program monitor">
       <header className="panel-header monitor-header">
@@ -79,7 +81,7 @@ export function VideoMonitor({
         </div>
         <div className="source-range" aria-label="Source In and Out points">
           <span>IN <strong>{seconds(markIn)}</strong></span>
-          <span>OUT <strong>{seconds(markOut)}</strong></span>
+          <span>OUT <strong>{seconds(validMarkOut)}</strong></span>
         </div>
       </footer>
     </section>

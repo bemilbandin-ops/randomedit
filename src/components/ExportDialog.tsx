@@ -7,6 +7,8 @@ interface ExportDialogProps {
   settings: EditorSettings;
   source: SourceMeta | null;
   isDemo: boolean;
+  reviewAvailable: boolean;
+  reviewUnavailableReason?: string;
   renderProgress: number | null;
   renderMessage: string;
   onDownloadProject: () => void;
@@ -20,6 +22,8 @@ export function ExportDialog({
   settings,
   source,
   isDemo,
+  reviewAvailable,
+  reviewUnavailableReason,
   renderProgress,
   renderMessage,
   onDownloadProject,
@@ -62,7 +66,12 @@ export function ExportDialog({
           <ListVideo size={23} />
           <h3>EDL for quick review</h3>
           <p>A compact CMX-style edit list with source and record timecodes for each sequence clip.</p>
-          <button className="secondary-button" type="button" onClick={onDownloadEdl}>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={onDownloadEdl}
+            data-tutorial-key="download-edl"
+          >
             Download .edl
           </button>
         </section>
@@ -80,12 +89,14 @@ export function ExportDialog({
           <button
             className="primary-button"
             type="button"
-            disabled={isDemo || !source || rendering}
+            disabled={isDemo || !source || !reviewAvailable || rendering}
             onClick={onRenderReview}
+            data-tutorial-key="render-review"
           >
             {rendering ? 'Rendering…' : 'Render review video'}
           </button>
           {isDemo ? <small>Upload your own video first. Remote example media is kept out of review rendering to avoid cross-origin canvas failures.</small> : null}
+          {!isDemo && !reviewAvailable && reviewUnavailableReason ? <small>{reviewUnavailableReason}</small> : null}
           {renderProgress !== null ? (
             <div className="render-progress" aria-label={`Render progress ${Math.round(renderProgress * 100)} percent`}>
               <span style={{ width: `${Math.round(renderProgress * 100)}%` }} />

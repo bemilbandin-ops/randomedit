@@ -1,5 +1,5 @@
 import { GripVertical, Music2, Video } from 'lucide-react';
-import type { MouseEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import type { Clip, Marker } from '../types.ts';
 import { sequenceDuration, timelineClipClickAction } from '../lib/timeline.ts';
 
@@ -7,6 +7,9 @@ interface TimelineProps {
   clips: Clip[];
   markers: Marker[];
   sequenceTime: number;
+  sequenceFps: number;
+  sourceDuration: number;
+  audioPeaks: number[] | null;
   selectedClipId: string | null;
   activeTool: 'selection' | 'razor';
   onSeek: (time: number) => void;
@@ -23,10 +26,31 @@ function timeFromPointer(event: MouseEvent<HTMLElement>, duration: number): numb
   return Math.max(0, Math.min(duration, ratio * duration));
 }
 
+function clipAudioPeaks(
+  audioPeaks: number[] | null,
+  clip: Clip,
+  sourceDuration: number,
+  maxBars = 24,
+): number[] {
+  if (!audioPeaks || audioPeaks.length === 0 || sourceDuration <= 0) return [];
+  const start = Math.max(0, Math.min(audioPeaks.length - 1, Math.floor((clip.sourceStart / sourceDuration) * audioPeaks.length)));
+  const end = Math.max(start + 1, Math.min(audioPeaks.length, Math.ceil((clip.sourceEnd / sourceDuration) * audioPeaks.length)));
+  const segment = audioPeaks.slice(start, end);
+  if (segment.length <= maxBars) return segment;
+  return Array.from({ length: maxBars }, (_, index) => {
+    const bucketStart = Math.floor((index * segment.length) / maxBars);
+    const bucketEnd = Math.max(bucketStart + 1, Math.floor(((index + 1) * segment.length) / maxBars));
+    return segment.slice(bucketStart, bucketEnd).reduce((peak, value) => Math.max(peak, value), 0);
+  });
+}
+
 export function Timeline({
   clips,
   markers,
   sequenceTime,
+  sequenceFps,
+  sourceDuration,
+  audioPeaks,
   selectedClipId,
   activeTool,
   onSeek,
@@ -38,6 +62,20 @@ export function Timeline({
 
   const handleRulerClick = (event: MouseEvent<HTMLDivElement>) => {
     onSeek(timeFromPointer(event, duration));
+  };
+
+  const handleRulerKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step = 1 / Math.max(1, sequenceFps);
+    let next: number | null = null;
+
+    if (event.key === 'ArrowLeft') next = sequenceTime - step;
+    if (event.key === 'ArrowRight') next = sequenceTime + step;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = duration;
+    if (next === null) return;
+
+    event.preventDefault();
+    onSeek(Math.max(0, Math.min(duration, next)));
   };
 
   let cursor = 0;
@@ -68,6 +106,14 @@ export function Timeline({
       <div
         className={`timeline-ruler ${activeTool === 'razor' ? 'timeline-ruler--razor' : ''}`}
         onClick={handleRulerClick}
+        onKeyDown={handleRulerKeyDown}
+        role="slider"
+        tabIndex={0}
+        aria-label="Timeline playhead"
+        aria-valuemin={0}
+        aria-valuemax={duration}
+        aria-valuenow={Math.min(sequenceTime, duration)}
+        aria-valuetext={`${Math.min(sequenceTime, duration).toFixed(2)} seconds`}
         data-tutorial-key="timeline-ruler"
       >
         {rulerTicks.map((tick) => (
@@ -102,7 +148,7 @@ export function Timeline({
                 const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
                 const localDuration = clip.sourceEnd - clip.sourceStart;
                 const clickTime = start + localDuration * Math.max(0, Math.min(1, ratio));
-                const action = timelineClipClickAction(activeTool, clip.id, clickTime);
+                const action = timelineClipClickAction(activeTool, clip.id, clickTime, sequenceFps);
                 onSeek(action.seekTime);
                 onClipClick(clip.id, action.seekTime);
               }}
@@ -124,13 +170,16 @@ export function Timeline({
           <strong>A1</strong>
         </div>
         <div className="track-lane track-lane--audio" aria-hidden="true">
-          {clipGeometry.map(({ clip, width }) => (
-            <div className="audio-clip" style={{ width: `${width}%` }} key={`audio-${clip.id}`}>
-              {Array.from({ length: 18 }, (_, barIndex) => (
-                <i style={{ height: `${22 + ((barIndex * 13) % 52)}%` }} key={barIndex} />
-              ))}
-            </div>
-          ))}
+          {clipGeometry.map(({ clip, width }) => {
+            const peaks = clipAudioPeaks(audioPeaks, clip, sourceDuration);
+            return (
+              <div className="audio-clip" style={{ width: `${width}%` }} key={`audio-${clip.id}`}>
+                {peaks.map((peak, barIndex) => (
+                  <i style={{ height: `${Math.max(3, peak * 100)}%` }} key={barIndex} />
+                ))}
+              </div>
+            );
+          })}
           <span className="timeline-playhead timeline-playhead--audio" style={{ left: `${playheadLeft}%` }} />
         </div>
       </div>

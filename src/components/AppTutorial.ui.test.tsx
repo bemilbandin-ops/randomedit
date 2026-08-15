@@ -25,6 +25,12 @@ async function click(element: Element): Promise<void> {
   });
 }
 
+async function clickAt(element: Element, clientX: number): Promise<void> {
+  await act(async () => {
+    element.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX }));
+  });
+}
+
 async function changeSelect(select: HTMLSelectElement, value: string): Promise<void> {
   await act(async () => {
     select.value = value;
@@ -86,74 +92,72 @@ describe('guided tutorial integration', () => {
     });
   }
 
-  it('counts a completed current step before Next is pressed', async () => {
-    await renderApp({
-      lessonIndex: 0,
-      stepIndex: 0,
-      completedLessonIds: [],
-      stepComplete: true,
+  async function loadDemoMetadata(duration = 10): Promise<void> {
+    const video = document.querySelector('video') as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    Object.defineProperty(video!, 'duration', { configurable: true, value: duration });
+    Object.defineProperty(video!, 'videoWidth', { configurable: true, value: 1920 });
+    Object.defineProperty(video!, 'videoHeight', { configurable: true, value: 1080 });
+    await act(async () => {
+      video!.dispatchEvent(new Event('loadedmetadata'));
     });
+  }
 
+  it('counts a completed current step before Next is pressed', async () => {
+    await renderApp({ lessonIndex: 0, stepIndex: 0, completedLessonIds: [], stepComplete: true });
     const totalSteps = lessons.reduce((total, lesson) => total + lesson.steps.length, 0);
     const expectedPercent = Math.round((1 / totalSteps) * 100);
     const progressButton = document.querySelector('.topbar__actions .toolbar-button');
-
     expect(progressButton?.textContent).toContain(`${expectedPercent}%`);
   });
 
   it('keeps one tutorial state even when localStorage writes fail', async () => {
-    setProgress({
-      lessonIndex: 0,
-      stepIndex: 1,
-      completedLessonIds: [],
-      stepComplete: false,
-    });
+    setProgress({ lessonIndex: 0, stepIndex: 1, completedLessonIds: [], stepComplete: false });
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('storage disabled');
     });
-
     await act(async () => {
       root.render(<App />);
     });
-
     const ruler = document.querySelector('[data-tutorial-key="timeline-ruler"]');
     expect(ruler).not.toBeNull();
     await click(ruler!);
-
     expect(document.querySelector('.guided-next')?.textContent).toContain('Next');
   });
 
-  it('blocks unrelated mouse and keyboard actions but keeps Show me where usable', async () => {
-    await renderApp({ lessonIndex: 0, stepIndex: 0, completedLessonIds: [], stepComplete: false });
-
-    const settings = document.querySelector('[data-tutorial-key="settings"]');
-    expect(settings).not.toBeNull();
-    await click(settings!);
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-
+  it('lets keyboard users seek on the timeline ruler and complete the seek lesson', async () => {
+    await renderApp({ lessonIndex: 0, stepIndex: 1, completedLessonIds: [], stepComplete: false });
+    const ruler = document.querySelector('[data-tutorial-key="timeline-ruler"]') as HTMLElement | null;
+    expect(ruler).not.toBeNull();
+    expect(ruler?.tabIndex).toBe(0);
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
+      ruler!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
-    expect(document.querySelector('.statusbar')?.textContent).toContain('Selection tool');
-
-    const showMe = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('Show me where'));
-    expect(showMe).toBeDefined();
-    await click(showMe!);
-    expect(document.querySelector('[data-tutorial-key="play-toggle"]')?.classList.contains('tutorial-pulse')).toBe(true);
-  });
-
-  it('freezes unrelated keyboard commands after Done until Next', async () => {
-    await renderApp({ lessonIndex: 0, stepIndex: 0, completedLessonIds: [], stepComplete: true });
-
-    await act(async () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
-    });
-
-    expect(document.querySelector('.statusbar')?.textContent).toContain('Selection tool');
     expect(document.querySelector('.guided-next')).not.toBeNull();
   });
 
-  it('freezes the completed highlighted target itself until Next', async () => {
+  it('keeps unrelated mouse and keyboard controls usable during guided steps', async () => {
+    await renderApp({ lessonIndex: 0, stepIndex: 0, completedLessonIds: [], stepComplete: false });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
+    });
+    expect(document.querySelector('.statusbar')?.textContent).toContain('Razor / Blade tool');
+    const settings = document.querySelector('[data-tutorial-key="settings"]');
+    expect(settings).not.toBeNull();
+    await click(settings!);
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it('keeps unrelated keyboard commands available after Done until Next', async () => {
+    await renderApp({ lessonIndex: 0, stepIndex: 0, completedLessonIds: [], stepComplete: true });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
+    });
+    expect(document.querySelector('.statusbar')?.textContent).toContain('Razor / Blade tool');
+    expect(document.querySelector('.guided-next')).not.toBeNull();
+  });
+
+  it('keeps the completed highlighted target usable while Next is shown', async () => {
     const targetClick = vi.fn();
     const onNext = vi.fn();
     const step: TutorialStep = {
@@ -163,33 +167,85 @@ describe('guided tutorial integration', () => {
       requiredEvent: 'clip.split',
       target: 'destructive-target',
     };
-
     await act(async () => {
       root.render(
         <>
-          <button type="button" data-tutorial-key="destructive-target" onClick={targetClick}>Dangerous action</button>
-          <GuidedTutorialOverlay
-            step={step}
-            lessonNumber={1}
-            totalLessons={1}
-            stepNumber={1}
-            totalSteps={1}
-            complete
-            onNext={onNext}
-          />
+          <button type="button" data-tutorial-key="destructive-target" onClick={targetClick}>Target action</button>
+          <GuidedTutorialOverlay step={step} lessonNumber={1} totalLessons={1} stepNumber={1} totalSteps={1} complete onNext={onNext} />
         </>,
       );
     });
-
     const target = document.querySelector('[data-tutorial-key="destructive-target"]');
     expect(target).not.toBeNull();
     await click(target!);
-    expect(targetClick).not.toHaveBeenCalled();
-
+    expect(targetClick).toHaveBeenCalledTimes(1);
     const next = document.querySelector('.guided-next');
     expect(next).not.toBeNull();
     await click(next!);
     expect(onNext).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not accept or complete Mark Out when there is no positive In-to-Out range', async () => {
+    await renderApp({ lessonIndex: 3, stepIndex: 0, completedLessonIds: completedBefore(3), stepComplete: false });
+    const markIn = document.querySelector('[data-tutorial-key="mark-in"]');
+    expect(markIn).not.toBeNull();
+    await click(markIn!);
+    const next = document.querySelector('.guided-next');
+    expect(next).not.toBeNull();
+    await click(next!);
+    const markOut = document.querySelector('[data-tutorial-key="mark-out"]');
+    expect(markOut).not.toBeNull();
+    await click(markOut!);
+    expect(document.querySelector('.guided-next')).toBeNull();
+    expect(document.querySelector('.source-range')?.textContent).toContain('OUT --');
+  });
+
+  it('applies the marked In/Out range as a real tutorial edit', async () => {
+    await renderApp({ lessonIndex: 3, stepIndex: 0, completedLessonIds: completedBefore(3), stepComplete: false });
+    await loadDemoMetadata(10);
+
+    await click(document.querySelector('[data-tutorial-key="mark-in"]')!);
+    await click(document.querySelector('.guided-next')!);
+
+    const ruler = document.querySelector('[data-tutorial-key="timeline-ruler"]');
+    expect(ruler).not.toBeNull();
+    await clickAt(ruler!, 300);
+    await click(document.querySelector('[data-tutorial-key="mark-out"]')!);
+    expect(document.querySelector('.guided-next')).not.toBeNull();
+    await click(document.querySelector('.guided-next')!);
+
+    const applyRange = document.querySelector('[data-tutorial-key="apply-range"]') as HTMLButtonElement | null;
+    expect(applyRange).not.toBeNull();
+    expect(applyRange?.disabled).toBe(false);
+    await click(applyRange!);
+    expect(document.querySelector('.guided-next')).not.toBeNull();
+    expect(document.querySelector('.timeline-clip')?.getAttribute('title')).toContain('0.00s–5.00s');
+  });
+
+  it('splits the clip under the playhead even when no clip remains selected', async () => {
+    await renderApp({
+      lessonIndex: lessons.length - 1,
+      stepIndex: lessons[lessons.length - 1].steps.length,
+      completedLessonIds: lessons.map((lesson) => lesson.id),
+      stepComplete: false,
+    });
+    await loadDemoMetadata(10);
+
+    const ruler = document.querySelector('[data-tutorial-key="timeline-ruler"]');
+    const split = document.querySelector('[data-tutorial-key="split-clip"]') as HTMLButtonElement | null;
+    expect(ruler).not.toBeNull();
+    expect(split).not.toBeNull();
+
+    await clickAt(ruler!, 300);
+    expect(split?.disabled).toBe(false);
+    await click(split!);
+    expect(document.querySelectorAll('.timeline-clip')).toHaveLength(2);
+
+    const splitAfterSelectionCleared = document.querySelector('[data-tutorial-key="split-clip"]') as HTMLButtonElement | null;
+    await clickAt(ruler!, 200);
+    expect(splitAfterSelectionCleared?.disabled).toBe(false);
+    await click(splitAfterSelectionCleared!);
+    expect(document.querySelectorAll('.timeline-clip')).toHaveLength(3);
   });
 
   it('does not lock unrelated controls when a tutorial target is missing', async () => {
@@ -201,24 +257,14 @@ describe('guided tutorial integration', () => {
       requiredEvent: 'test.missing',
       target: 'not-mounted',
     };
-
     await act(async () => {
       root.render(
         <>
           <button type="button" onClick={otherClick}>Still usable</button>
-          <GuidedTutorialOverlay
-            step={step}
-            lessonNumber={1}
-            totalLessons={1}
-            stepNumber={1}
-            totalSteps={1}
-            complete={false}
-            onNext={() => undefined}
-          />
+          <GuidedTutorialOverlay step={step} lessonNumber={1} totalLessons={1} stepNumber={1} totalSteps={1} complete={false} onNext={() => undefined} />
         </>,
       );
     });
-
     expect(document.querySelector('.guided-card')).toBeNull();
     const other = Array.from(document.querySelectorAll('button')).find((button) => button.textContent === 'Still usable');
     expect(other).toBeDefined();
@@ -226,47 +272,75 @@ describe('guided tutorial integration', () => {
     expect(otherClick).toHaveBeenCalledTimes(1);
   });
 
-  it('guides Settings inside the modal, closes it on Next, then guides the actual project download', async () => {
+  it('focuses dialogs, closes them with Escape, and restores focus to the opener', async () => {
     await renderApp({
-      lessonIndex: 6,
-      stepIndex: 0,
-      completedLessonIds: completedBefore(6),
+      lessonIndex: lessons.length - 1,
+      stepIndex: lessons[lessons.length - 1].steps.length,
+      completedLessonIds: lessons.map((lesson) => lesson.id),
       stepComplete: false,
     });
+    const settings = document.querySelector('[data-tutorial-key="settings"]') as HTMLButtonElement | null;
+    expect(settings).not.toBeNull();
+    settings!.focus();
+    await click(settings!);
+    const dialog = document.querySelector('[role="dialog"]');
+    const close = document.querySelector('[aria-label="Close dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(close).not.toBeNull();
+    expect(document.activeElement).toBe(close);
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(settings);
+  });
 
+  it('requires review capability plus separate project JSON and EDL handoff steps', async () => {
+    await renderApp({ lessonIndex: 6, stepIndex: 0, completedLessonIds: completedBefore(6), stepComplete: false });
     const settingsButton = document.querySelector('[data-tutorial-key="settings"]');
     expect(settingsButton).not.toBeNull();
     await click(settingsButton!);
-
     const settingsOptions = document.querySelector('[data-tutorial-key="settings-options"]');
     expect(settingsOptions).not.toBeNull();
-
-    const showMe = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('Show me where'));
-    expect(showMe).toBeDefined();
-    await click(showMe!);
-    expect(settingsOptions?.classList.contains('tutorial-pulse')).toBe(true);
-
     const speed = settingsOptions!.querySelector('select') as HTMLSelectElement | null;
     expect(speed).not.toBeNull();
     await changeSelect(speed!, '0.5');
-
     const nextAfterSettings = document.querySelector('.guided-next');
     expect(nextAfterSettings).not.toBeNull();
     await click(nextAfterSettings!);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
 
+    const reviewExportButton = document.querySelector('[data-tutorial-key="export-project"]');
+    expect(reviewExportButton).not.toBeNull();
+    await click(reviewExportButton!);
+    const renderReview = document.querySelector('[data-tutorial-key="render-review"]') as HTMLButtonElement | null;
+    expect(renderReview).not.toBeNull();
+    expect(renderReview?.disabled).toBe(true);
+    expect(document.querySelector('.guided-next')).not.toBeNull();
+    await click(document.querySelector('.guided-next')!);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+
     const exportButton = document.querySelector('[data-tutorial-key="export-project"]');
     expect(exportButton).not.toBeNull();
     await click(exportButton!);
-
     const downloadProject = document.querySelector('[data-tutorial-key="download-project"]');
     expect(downloadProject).not.toBeNull();
     await click(downloadProject!);
+    const nextAfterProject = document.querySelector('.guided-next');
+    expect(nextAfterProject).not.toBeNull();
+    await click(nextAfterProject!);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.body.textContent).not.toContain('Foundation complete');
 
-    const nextAfterExport = document.querySelector('.guided-next');
-    expect(nextAfterExport).not.toBeNull();
-    await click(nextAfterExport!);
-
+    const exportAgain = document.querySelector('[data-tutorial-key="export-project"]');
+    expect(exportAgain).not.toBeNull();
+    await click(exportAgain!);
+    const downloadEdl = document.querySelector('[data-tutorial-key="download-edl"]');
+    expect(downloadEdl).not.toBeNull();
+    await click(downloadEdl!);
+    const nextAfterEdl = document.querySelector('.guided-next');
+    expect(nextAfterEdl).not.toBeNull();
+    await click(nextAfterEdl!);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.body.textContent).toContain('Foundation complete');
   });

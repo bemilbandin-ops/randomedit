@@ -2,7 +2,7 @@ import { RotateCcw, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Modal } from './Modal.tsx';
-import { shortcutCommands } from '../data/shortcuts.ts';
+import { referenceDisplayBinding, shortcutCommands } from '../data/shortcuts.ts';
 import { findShortcutConflict, normalizeShortcut } from '../lib/shortcuts.ts';
 import type { ShortcutBindings, ShortcutProfile } from '../types.ts';
 
@@ -28,6 +28,7 @@ export function ShortcutDialog({
   const [query, setQuery] = useState('');
   const [recordingCommand, setRecordingCommand] = useState<string | null>(null);
   const [conflictMessage, setConflictMessage] = useState('');
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -37,13 +38,13 @@ export function ShortcutDialog({
         command.name,
         command.category,
         command.description,
-        command.premiere,
-        command.resolve,
+        referenceDisplayBinding(command.id, 'premiere', isMac),
+        referenceDisplayBinding(command.id, 'resolve', isMac),
         bindings[command.id] ?? '',
       ].join(' ').toLowerCase();
       return haystack.includes(needle);
     });
-  }, [bindings, query]);
+  }, [bindings, isMac, query]);
 
   const record = (commandId: string, event: KeyboardEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -139,8 +140,8 @@ export function ShortcutDialog({
               >
                 {recording ? 'Press keys…' : <kbd>{bindings[command.id] || 'Unassigned'}</kbd>}
               </button>
-              <kbd className="reference-key">{command.premiere}</kbd>
-              <kbd className="reference-key">{command.resolve}</kbd>
+              <kbd className="reference-key">{referenceDisplayBinding(command.id, 'premiere', isMac)}</kbd>
+              <kbd className="reference-key">{referenceDisplayBinding(command.id, 'resolve', isMac)}</kbd>
               <button className="row-action" type="button" onClick={() => onResetCommand(command.id)}>
                 Reset
               </button>

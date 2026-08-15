@@ -13,6 +13,8 @@ const keyAliases: Record<string, string> = {
   Escape: 'Esc',
 };
 
+const MODIFIER_KEYS = new Set(['Control', 'Meta', 'Alt', 'Shift']);
+
 function normalizeKey(key: string): string {
   if (keyAliases[key]) return keyAliases[key];
   if (key.length === 1) return key.toUpperCase();
@@ -20,17 +22,15 @@ function normalizeKey(key: string): string {
 }
 
 export function normalizeShortcut(event: ShortcutKeyEvent): string {
+  if (MODIFIER_KEYS.has(event.key)) return '';
+
   const parts: string[] = [];
   if (event.ctrlKey) parts.push('Ctrl');
   if (event.metaKey) parts.push('Cmd');
   if (event.altKey) parts.push('Alt');
   if (event.shiftKey) parts.push('Shift');
 
-  const key = normalizeKey(event.key);
-  if (!['Control', 'Meta', 'Alt', 'Shift'].includes(event.key)) {
-    parts.push(key);
-  }
-
+  parts.push(normalizeKey(event.key));
   return parts.join('+');
 }
 
