@@ -128,33 +128,6 @@ export function GuidedTutorialOverlay({
     };
   }, [step?.id, step?.target]);
 
-  useEffect(() => {
-    if (!step?.target) return undefined;
-
-    const target = document.querySelector<HTMLElement>(`[data-tutorial-key="${step.target}"]`);
-    if (!target) return undefined;
-
-    const blockUnrelatedClick = (event: MouseEvent) => {
-      const clicked = event.target instanceof Element ? event.target : null;
-      if (!clicked) return;
-
-      const completedTargetIsSafe = complete && step.requiredEvent === 'transport.played';
-      const targetIsAllowed = (!complete || completedTargetIsSafe) && target.contains(clicked);
-      const allowed = targetIsAllowed
-        || Boolean(clicked.closest('.guided-card'))
-        || Boolean(clicked.closest('.coach-show'))
-        || Boolean(clicked.closest('[aria-label="Close dialog"]'));
-
-      if (allowed) return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-    };
-
-    document.addEventListener('click', blockUnrelatedClick, true);
-    return () => document.removeEventListener('click', blockUnrelatedClick, true);
-  }, [complete, step?.id, step?.requiredEvent, step?.target]);
-
   const cardStyle = useMemo(() => (rect ? getCardStyle(rect) : undefined), [rect]);
 
   if (!step?.target || !rect || !cardStyle) return null;
