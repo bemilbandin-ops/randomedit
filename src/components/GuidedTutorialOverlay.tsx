@@ -131,13 +131,15 @@ export function GuidedTutorialOverlay({
   useEffect(() => {
     if (!step?.target) return undefined;
 
+    const target = document.querySelector<HTMLElement>(`[data-tutorial-key="${step.target}"]`);
+    if (!target) return undefined;
+
     const blockUnrelatedClick = (event: MouseEvent) => {
       const clicked = event.target instanceof Element ? event.target : null;
       if (!clicked) return;
 
-      const target = document.querySelector<HTMLElement>(`[data-tutorial-key="${step.target}"]`);
       const completedTargetIsSafe = complete && step.requiredEvent === 'transport.played';
-      const targetIsAllowed = (!complete || completedTargetIsSafe) && Boolean(target?.contains(clicked));
+      const targetIsAllowed = (!complete || completedTargetIsSafe) && target.contains(clicked);
       const allowed = targetIsAllowed
         || Boolean(clicked.closest('.guided-card'))
         || Boolean(clicked.closest('.coach-show'))
