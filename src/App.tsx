@@ -14,7 +14,7 @@ import { getPresetBindings } from './data/shortcuts.ts';
 import { useLocalStorage } from './hooks/useLocalStorage.ts';
 import { downloadBlob, downloadText } from './lib/download.ts';
 import { parseProject, serializeProject, toEdl } from './lib/export.ts';
-import { renderReviewVideo } from './lib/renderReview.ts';
+import { renderReviewVideo, reviewExportCapability } from './lib/renderReview.ts';
 import { normalizeShortcut } from './lib/shortcuts.ts';
 import {
   moveClip,
@@ -139,6 +139,7 @@ export default function App() {
   const relinkingProjectRef = useRef(false);
   const backwardTimerRef = useRef<number | null>(null);
   const clipHistoryRef = useRef<Clip[][]>([]);
+  const renderingReviewRef = useRef(false);
 
   const duration = sequenceDuration(clips);
   const currentLesson = lessons[progress.lessonIndex];
@@ -148,6 +149,12 @@ export default function App() {
   const overlayStep = useMemo(() => getOverlayStep(currentStep, openDialog), [currentStep, openDialog]);
   const courseComplete = progress.completedLessonIds.length === lessons.length;
   const tutorialStepComplete = Boolean(progress.stepComplete);
+  const reviewCapability = useMemo(() => reviewExportCapability(settings.exportFormat, {
+    hasMediaRecorder: typeof MediaRecorder !== 'undefined',
+    hasCanvasCapture: typeof HTMLCanvasElement !== 'undefined'
+      && typeof HTMLCanvasElement.prototype.captureStream === 'function',
+    isTypeSupported: (mime) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(mime),
+  }), [settings.exportFormat]);
 
   const progressPercent = useMemo(() => {
     const totalSteps = lessons.reduce((total, lesson) => total + lesson.steps.length, 0);
@@ -340,7 +347,7 @@ export default function App() {
 
   const handleTimeUpdate = useCallback(() => {
     const video = videoRef.current;
-    if (!video || clips.length === 0 || backwardTimerRef.current !== null) return;
+    if (!video || clips.length === 0 || backwardTimerRef.current !== null || renderingReviewRef.current) return;
     const clipIndex = Math.max(0, Math.min(activeClipIndexRef.current, clips.length - 1));
     const clip = clips[clipIndex];
 
@@ -609,8 +616,9 @@ export default function App() {
 
   const handleRenderReview = useCallback(async () => {
     const video = videoRef.current;
-    if (!video || !source || isDemo || clips.length === 0) return;
+    if (!video || !source || isDemo || clips.length === 0 || !reviewCapability.available) return;
     stopPlayback();
+    renderingReviewRef.current = true;
     setRenderProgress(0);
     setRenderMessage('Rendering the edited sequence in real time…');
     try {
@@ -623,14 +631,19 @@ export default function App() {
       });
       downloadBlob(result.blob, `${cleanFilename(projectName)}-review.${result.extension}`);
       setRenderProgress(1);
-      setRenderMessage(result.usedFallback
+      const formatMessage = result.usedFallback
         ? `Your browser could not record the preferred ${settings.exportFormat.toUpperCase()} format, so the review was exported as ${result.extension.toUpperCase()}.`
-        : `Review exported as ${result.extension.toUpperCase()}.`);
+        : `Review exported as ${result.extension.toUpperCase()}.`;
+      setRenderMessage(result.hasAudio
+        ? formatMessage
+        : `${formatMessage} This browser did not expose an audio track, so the review is video-only.`);
     } catch (error) {
       setRenderProgress(null);
       setRenderMessage(error instanceof Error ? error.message : 'Review rendering failed.');
+    } finally {
+      renderingReviewRef.current = false;
     }
-  }, [clips, isDemo, projectName, settings, source, stopPlayback]);
+  }, [clips, isDemo, projectName, reviewCapability.available, settings, source, stopPlayback]);
 
   const resetProgress = useCallback(() => setProgress(INITIAL_PROGRESS), [setProgress]);
 
@@ -759,6 +772,8 @@ export default function App() {
           settings={settings}
           source={source}
           isDemo={isDemo}
+          reviewAvailable={reviewCapability.available}
+          reviewUnavailableReason={reviewCapability.reason}
           renderProgress={renderProgress}
           renderMessage={renderMessage}
           onDownloadProject={handleDownloadProject}
