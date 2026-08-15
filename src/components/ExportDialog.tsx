@@ -66,7 +66,12 @@ export function ExportDialog({
           <ListVideo size={23} />
           <h3>EDL for quick review</h3>
           <p>A compact CMX-style edit list with source and record timecodes for each sequence clip.</p>
-          <button className="secondary-button" type="button" onClick={onDownloadEdl}>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={onDownloadEdl}
+            data-tutorial-key="download-edl"
+          >
             Download .edl
           </button>
         </section>
