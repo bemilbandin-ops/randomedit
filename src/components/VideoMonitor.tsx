@@ -62,7 +62,6 @@ export function VideoMonitor({
             src={sourceUrl}
             playsInline
             preload="metadata"
-            crossOrigin={isDemo ? 'anonymous' : undefined}
             onLoadedMetadata={onLoadedMetadata}
             onTimeUpdate={onTimeUpdate}
             onEnded={onEnded}
