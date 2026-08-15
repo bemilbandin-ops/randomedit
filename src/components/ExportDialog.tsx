@@ -48,7 +48,12 @@ export function ExportDialog({
           <FileJson size={23} />
           <h3>Random Edit project</h3>
           <p>Portable JSON with clip boundaries, markers, settings, tutorial progress and shortcuts.</p>
-          <button className="primary-button" type="button" onClick={onDownloadProject}>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={onDownloadProject}
+            data-tutorial-key="download-project"
+          >
             Download project
           </button>
         </section>
