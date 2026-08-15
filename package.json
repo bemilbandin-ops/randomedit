@@ -12,6 +12,7 @@
     "test": "npm run test:run",
     "test:unit": "node --experimental-strip-types --test src/**/*.test.ts",
     "test:ui": "vitest run src/components/AppTutorial.ui.test.tsx --environment jsdom",
+    "test:browser-media": "node scripts/browser-media-smoke.mjs",
     "test:run": "npm run test:unit && npm run test:ui"
   },
   "dependencies": {
