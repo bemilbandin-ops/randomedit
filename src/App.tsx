@@ -78,6 +78,14 @@ function getOverlayStep(step: TutorialStep | undefined, openDialog: DialogName):
     };
   }
 
+  if (step.id === 'review-video' && openDialog === 'export') {
+    return {
+      ...step,
+      target: 'render-review',
+      simpleBody: 'Render the highlighted review copy when it is available. If the browser cannot record it, read the limitation shown here; the capability check is enough to unlock Next.',
+    };
+  }
+
   if (step.id === 'export-project' && openDialog === 'export') {
     return {
       ...step,
@@ -192,6 +200,7 @@ export default function App() {
       && typeof HTMLCanvasElement.prototype.captureStream === 'function',
     isTypeSupported: (mime) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(mime),
   }), [settings.exportFormat]);
+  const reviewStepUnavailable = isDemo || !source || !reviewCapability.available;
 
   const progressPercent = useMemo(() => {
     const totalSteps = lessons.reduce((total, lesson) => total + lesson.steps.length, 0);
@@ -213,7 +222,10 @@ export default function App() {
   const handleTutorialNext = useCallback(() => {
     if (
       (currentStep?.id === 'settings' && openDialog === 'settings')
-      || ((currentStep?.id === 'export-project' || currentStep?.id === 'export-edl') && openDialog === 'export')
+      || (
+        (currentStep?.id === 'review-video' || currentStep?.id === 'export-project' || currentStep?.id === 'export-edl')
+        && openDialog === 'export'
+      )
     ) {
       setOpenDialog(null);
     }
@@ -772,13 +784,14 @@ export default function App() {
       setRenderMessage(result.hasAudio
         ? formatMessage
         : `${formatMessage} This browser did not expose an audio track, so the review is video-only.`);
+      emitTutorialEvent('review.checked', { available: true, hasAudio: result.hasAudio });
     } catch (error) {
       setRenderProgress(null);
       setRenderMessage(error instanceof Error ? error.message : 'Review rendering failed.');
     } finally {
       renderingReviewRef.current = false;
     }
-  }, [clips, isDemo, projectName, reviewCapability.available, settings, source, stopPlayback]);
+  }, [clips, emitTutorialEvent, isDemo, projectName, reviewCapability.available, settings, source, stopPlayback]);
 
   const resetProgress = useCallback(() => setProgress(INITIAL_PROGRESS), [setProgress]);
 
@@ -812,6 +825,9 @@ export default function App() {
           setRenderMessage('');
           setRenderProgress(null);
           setOpenDialog('export');
+          if (currentStep?.id === 'review-video' && reviewStepUnavailable) {
+            emitTutorialEvent('review.checked', { available: false });
+          }
         }}
       />
 
