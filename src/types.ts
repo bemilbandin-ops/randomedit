@@ -1,5 +1,6 @@
 export type ClipEdge = 'start' | 'end';
 export type ShortcutProfile = 'premiere' | 'resolve' | 'custom';
+export type ShortcutBaseProfile = 'premiere' | 'resolve';
 export type ExportResolution = 'source' | '720p' | '1080p' | '1440p' | '2160p';
 export type ExportFormat = 'webm' | 'mp4';
 
@@ -29,6 +30,11 @@ export interface SourceMeta {
   duration: number;
   width: number;
   height: number;
+  fileSize?: number;
+  fingerprint?: string;
+  sourceFps?: number;
+  startTimecode?: string;
+  reel?: string;
 }
 
 export interface TutorialProgress {
@@ -55,13 +61,14 @@ export interface ShortcutCommand {
 export type ShortcutBindings = Record<string, string>;
 
 export interface ProjectState {
-  version: 1;
+  version: 2;
   name: string;
   source: SourceMeta | null;
   clips: Clip[];
   markers: Marker[];
   settings: EditorSettings;
   shortcutProfile: ShortcutProfile;
+  shortcutBaseProfile: ShortcutBaseProfile;
   shortcutBindings: ShortcutBindings;
   tutorial: TutorialProgress;
 }
