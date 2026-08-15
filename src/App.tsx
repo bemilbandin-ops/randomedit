@@ -13,13 +13,14 @@ import { lessons } from './data/lessons.ts';
 import { getPresetBindings } from './data/shortcuts.ts';
 import { useLocalStorage } from './hooks/useLocalStorage.ts';
 import { downloadBlob, downloadText } from './lib/download.ts';
-import { parseProject, serializeProject, toEdl } from './lib/export.ts';
+import { formatTimecode, parseProject, serializeProject, toEdl } from './lib/export.ts';
 import { renderReviewVideo, reviewExportCapability } from './lib/renderReview.ts';
 import { normalizeShortcut } from './lib/shortcuts.ts';
 import {
   moveClip,
   rippleDeleteClip,
   sequenceDuration,
+  sequenceTimeAfterEdit,
   sequenceToSourceTime,
   sourceToSequenceTime,
   splitClip,
@@ -79,18 +80,6 @@ function getOverlayStep(step: TutorialStep | undefined, openDialog: DialogName):
 function cleanFilename(name: string): string {
   const clean = name.trim().replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '');
   return clean || 'random-edit-project';
-}
-
-function formatTimecode(time: number, fpsValue: number): string {
-  const fps = Math.max(1, Math.round(fpsValue));
-  const framesTotal = Math.max(0, Math.round(time * fps));
-  const frames = framesTotal % fps;
-  const secondsTotal = Math.floor(framesTotal / fps);
-  const seconds = secondsTotal % 60;
-  const minutesTotal = Math.floor(secondsTotal / 60);
-  const minutes = minutesTotal % 60;
-  const hours = Math.floor(minutesTotal / 60);
-  return [hours, minutes, seconds, frames].map((value) => String(value).padStart(2, '0')).join(':');
 }
 
 function sourceMetaFromVideo(video: HTMLVideoElement, name: string): SourceMeta {
@@ -205,15 +194,19 @@ export default function App() {
     if (videoRef.current) videoRef.current.playbackRate = settings.playbackSpeed;
   }, [settings.playbackSpeed]);
 
-  const syncVideoToSequence = useCallback((time: number) => {
+  const syncVideoToClips = useCallback((targetClips: Clip[], time: number) => {
     const video = videoRef.current;
-    const mapped = sequenceToSourceTime(clips, time);
+    const mapped = sequenceToSourceTime(targetClips, time);
     if (!video || mapped.clipIndex < 0) return;
     activeClipIndexRef.current = mapped.clipIndex;
     if (Math.abs(video.currentTime - mapped.sourceTime) > 0.008) {
       video.currentTime = mapped.sourceTime;
     }
-  }, [clips]);
+  }, []);
+
+  const syncVideoToSequence = useCallback((time: number) => {
+    syncVideoToClips(clips, time);
+  }, [clips, syncVideoToClips]);
 
   const seekSequence = useCallback((time: number, tutorialSeek = false) => {
     const next = Math.max(0, Math.min(duration, time));
@@ -409,9 +402,11 @@ export default function App() {
     if (commitClips(next)) {
       setSelectedClipId(null);
       setActiveTool('selection');
+      setSequenceTime(Math.min(time, sequenceDuration(next)));
+      syncVideoToClips(next, time);
       emitTutorialEvent('clip.split');
     }
-  }, [clips, commitClips, emitTutorialEvent]);
+  }, [clips, commitClips, emitTutorialEvent, syncVideoToClips]);
 
   const handleTrim = useCallback((edge: 'start' | 'end') => {
     if (!selectedClipId) return;
@@ -420,29 +415,34 @@ export default function App() {
     if (selectedIndex < 0 || mapped.clipIndex !== selectedIndex) return;
     const next = trimClip(clips, selectedClipId, edge, mapped.sourceTime);
     if (commitClips(next)) {
-      setSequenceTime(Math.min(sequenceTime, sequenceDuration(next)));
+      const nextTime = sequenceTimeAfterEdit(clips, sequenceTime, next);
+      setSequenceTime(nextTime);
+      syncVideoToClips(next, nextTime);
       emitTutorialEvent('clip.trimmed', { edge });
     }
-  }, [clips, commitClips, emitTutorialEvent, selectedClipId, sequenceTime]);
+  }, [clips, commitClips, emitTutorialEvent, selectedClipId, sequenceTime, syncVideoToClips]);
 
   const handleRippleDelete = useCallback(() => {
     if (!selectedClipId || clips.length <= 1) return;
     const next = rippleDeleteClip(clips, selectedClipId);
     if (commitClips(next)) {
       setSelectedClipId(next[0]?.id ?? null);
-      const nextDuration = sequenceDuration(next);
-      const nextTime = Math.min(sequenceTime, nextDuration);
+      const nextTime = sequenceTimeAfterEdit(clips, sequenceTime, next);
       setSequenceTime(nextTime);
-      const mapped = sequenceToSourceTime(next, nextTime);
-      if (videoRef.current && mapped.clipIndex >= 0) videoRef.current.currentTime = mapped.sourceTime;
+      syncVideoToClips(next, nextTime);
       emitTutorialEvent('clip.rippleDeleted');
     }
-  }, [clips, commitClips, emitTutorialEvent, selectedClipId, sequenceTime]);
+  }, [clips, commitClips, emitTutorialEvent, selectedClipId, sequenceTime, syncVideoToClips]);
 
   const handleMove = useCallback((direction: -1 | 1) => {
     if (!selectedClipId) return;
-    commitClips(moveClip(clips, selectedClipId, direction));
-  }, [clips, commitClips, selectedClipId]);
+    const next = moveClip(clips, selectedClipId, direction);
+    if (commitClips(next)) {
+      const nextTime = sequenceTimeAfterEdit(clips, sequenceTime, next);
+      setSequenceTime(nextTime);
+      syncVideoToClips(next, nextTime);
+    }
+  }, [clips, commitClips, selectedClipId, sequenceTime, syncVideoToClips]);
 
   const handleMarker = useCallback(() => {
     setMarkers((current) => [
@@ -455,11 +455,14 @@ export default function App() {
     const previous = clipHistoryRef.current.pop();
     if (!previous) return;
     stopPlayback();
+    const nextTime = sequenceTimeAfterEdit(clips, sequenceTime, previous);
     setClips(previous);
-    setSelectedClipId(previous[0]?.id ?? null);
-    const nextTime = Math.min(sequenceTime, sequenceDuration(previous));
+    setSelectedClipId((current) => (
+      current && previous.some((clip) => clip.id === current) ? current : previous[0]?.id ?? null
+    ));
     setSequenceTime(nextTime);
-  }, [sequenceTime, stopPlayback]);
+    syncVideoToClips(previous, nextTime);
+  }, [clips, sequenceTime, stopPlayback, syncVideoToClips]);
 
   const handleClipClick = useCallback((clipId: string, time: number) => {
     if (activeTool === 'razor') {
