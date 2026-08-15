@@ -136,7 +136,9 @@ export function GuidedTutorialOverlay({
       if (!clicked) return;
 
       const target = document.querySelector<HTMLElement>(`[data-tutorial-key="${step.target}"]`);
-      const allowed = target?.contains(clicked)
+      const completedTargetIsSafe = complete && step.requiredEvent === 'transport.played';
+      const targetIsAllowed = (!complete || completedTargetIsSafe) && Boolean(target?.contains(clicked));
+      const allowed = targetIsAllowed
         || Boolean(clicked.closest('.guided-card'))
         || Boolean(clicked.closest('.coach-show'))
         || Boolean(clicked.closest('[aria-label="Close dialog"]'));
@@ -149,7 +151,7 @@ export function GuidedTutorialOverlay({
 
     document.addEventListener('click', blockUnrelatedClick, true);
     return () => document.removeEventListener('click', blockUnrelatedClick, true);
-  }, [step?.id, step?.target]);
+  }, [complete, step?.id, step?.requiredEvent, step?.target]);
 
   const cardStyle = useMemo(() => (rect ? getCardStyle(rect) : undefined), [rect]);
 
