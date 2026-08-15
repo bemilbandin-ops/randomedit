@@ -29,7 +29,7 @@ test('round trips a project through JSON', () => {
 });
 
 test('rejects unsupported project versions', () => {
-  assert.throws(() => parseProject('{"version":2,"name":"old"}'), /version/i);
+  assert.throws(() => parseProject('{"version":3,"name":"future"}'), /version/i);
 });
 
 test('rejects malformed clip boundaries', () => {
@@ -63,6 +63,34 @@ test('rejects invalid source metadata', () => {
   assert.throws(() => parseProject(JSON.stringify(malformed)), /invalid project/i);
 });
 
+test('migrates a version 1 project to the current project model with a reset base preset', () => {
+  const parsed = parseProject(JSON.stringify(project)) as ProjectState & { shortcutBaseProfile?: string };
+  assert.equal(parsed.version, 2);
+  assert.equal(parsed.shortcutBaseProfile, 'premiere');
+});
+
+test('preserves source identity and handoff metadata while parsing project JSON', () => {
+  const enriched = {
+    ...project,
+    source: {
+      ...project.source!,
+      fileSize: 123456,
+      fingerprint: 'sha256:abc123',
+      sourceFps: 25,
+      startTimecode: '01:00:00:00',
+      reel: 'CAM001',
+    },
+  };
+  const parsed = parseProject(JSON.stringify(enriched)) as ProjectState & {
+    source: NonNullable<ProjectState['source']> & Record<string, unknown>;
+  };
+  assert.equal(parsed.source.fileSize, 123456);
+  assert.equal(parsed.source.fingerprint, 'sha256:abc123');
+  assert.equal(parsed.source.sourceFps, 25);
+  assert.equal(parsed.source.startTimecode, '01:00:00:00');
+  assert.equal(parsed.source.reel, 'CAM001');
+});
+
 test('writes an ordered CMX-style EDL with source and record timecodes', () => {
   const edl = toEdl(project);
   assert.match(edl, /TITLE: Practice Cut/);
@@ -70,6 +98,21 @@ test('writes an ordered CMX-style EDL with source and record timecodes', () => {
   assert.match(edl, /00:00:01:00 00:00:03:00 00:00:00:00 00:00:02:00/);
   assert.match(edl, /002  AX       V     C/);
   assert.match(edl, /00:00:05:00 00:00:08:00 00:00:02:00 00:00:05:00/);
+});
+
+test('uses source reel and start-timecode metadata in EDL source timecodes', () => {
+  const metadataProject = {
+    ...project,
+    source: {
+      ...project.source!,
+      sourceFps: 25,
+      startTimecode: '01:00:00:00',
+      reel: 'CAM001',
+    },
+  } as ProjectState;
+  const edl = toEdl(metadataProject);
+  assert.match(edl, /001  CAM001   V     C/);
+  assert.match(edl, /01:00:01:00 01:00:03:00 00:00:00:00 00:00:02:00/);
 });
 
 test('uses the actual fractional frame rate when converting elapsed time to NDF timecode', () => {
