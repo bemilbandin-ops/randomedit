@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseProject, serializeProject, toEdl } from './export.ts';
+import { formatTimecode, parseProject, serializeProject, toEdl } from './export.ts';
 import type { ProjectState } from '../types.ts';
 
 const project: ProjectState = {
@@ -70,4 +70,19 @@ test('writes an ordered CMX-style EDL with source and record timecodes', () => {
   assert.match(edl, /00:00:01:00 00:00:03:00 00:00:00:00 00:00:02:00/);
   assert.match(edl, /002  AX       V     C/);
   assert.match(edl, /00:00:05:00 00:00:08:00 00:00:02:00 00:00:05:00/);
+});
+
+test('uses the actual fractional frame rate when converting elapsed time to NDF timecode', () => {
+  assert.equal(formatTimecode(3600, 29.97), '00:59:56:12');
+});
+
+test('uses corrected fractional-rate timecodes in EDL output', () => {
+  const fractional: ProjectState = {
+    ...project,
+    source: { name: 'long.mp4', duration: 4000, width: 1920, height: 1080 },
+    clips: [{ id: 'long', name: 'long.mp4', sourceStart: 3600, sourceEnd: 3601 }],
+    settings: { ...project.settings, sequenceFps: 29.97 },
+  };
+  const edl = toEdl(fractional);
+  assert.match(edl, /00:59:56:12/);
 });
