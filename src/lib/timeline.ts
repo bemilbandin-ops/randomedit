@@ -2,6 +2,27 @@ import type { Clip, ClipEdge } from '../types.ts';
 
 const clipDuration = (clip: Clip) => Math.max(0, clip.sourceEnd - clip.sourceStart);
 
+export interface TimelineClipClickAction {
+  seekTime: number;
+  tutorialSeek: true;
+  selectClipId: string | null;
+  split: boolean;
+}
+
+export function timelineClipClickAction(
+  activeTool: string,
+  clipId: string,
+  sequenceTime: number,
+): TimelineClipClickAction {
+  const selectionMode = activeTool === 'selection';
+  return {
+    seekTime: sequenceTime,
+    tutorialSeek: true,
+    selectClipId: selectionMode ? clipId : null,
+    split: !selectionMode,
+  };
+}
+
 export function sequenceDuration(clips: Clip[]): number {
   return clips.reduce((total, clip) => total + clipDuration(clip), 0);
 }
