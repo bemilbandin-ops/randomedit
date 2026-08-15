@@ -15,6 +15,8 @@ interface ToolBarProps {
   isPlaying: boolean;
   activeTool: 'selection' | 'razor';
   hasSelection: boolean;
+  canSplit: boolean;
+  canApplyRange: boolean;
   onPlayPause: () => void;
   onShuttleBack: () => void;
   onStop: () => void;
@@ -22,6 +24,7 @@ interface ToolBarProps {
   onFrameStep: (direction: -1 | 1) => void;
   onMarkIn: () => void;
   onMarkOut: () => void;
+  onApplyRange: () => void;
   onSplit: () => void;
   onTrim: (edge: 'start' | 'end') => void;
   onRippleDelete: () => void;
@@ -34,6 +37,8 @@ export function ToolBar({
   isPlaying,
   activeTool,
   hasSelection,
+  canSplit,
+  canApplyRange,
   onPlayPause,
   onShuttleBack,
   onStop,
@@ -41,6 +46,7 @@ export function ToolBar({
   onFrameStep,
   onMarkIn,
   onMarkOut,
+  onApplyRange,
   onSplit,
   onTrim,
   onRippleDelete,
@@ -119,6 +125,16 @@ export function ToolBar({
         <button className="text-tool" type="button" onClick={onMarkOut} data-tutorial-key="mark-out">
           Mark Out <kbd>O</kbd>
         </button>
+        <button
+          className="text-tool"
+          type="button"
+          onClick={onApplyRange}
+          disabled={!canApplyRange}
+          data-tutorial-key="apply-range"
+          title="Trim the clip under the playhead to the marked In/Out range"
+        >
+          Use In/Out
+        </button>
         <button className="tool-button" type="button" onClick={onMarker} title="Add marker (M)">
           <Flag size={15} />
           <kbd>M</kbd>
@@ -132,7 +148,7 @@ export function ToolBar({
           className="text-tool text-tool--strong"
           type="button"
           onClick={onSplit}
-          disabled={!hasSelection}
+          disabled={!canSplit}
           data-tutorial-key="split-clip"
         >
           <Scissors size={14} /> Split
