@@ -1,7 +1,10 @@
 import { ArrowRight, CheckCircle2, Crosshair } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
-import type { TutorialStep } from '../lib/tutorial.ts';
+import { lessons } from '../data/lessons.ts';
+import { useLocalStorage } from '../hooks/useLocalStorage.ts';
+import { continueTutorial, type TutorialStep } from '../lib/tutorial.ts';
+import type { TutorialProgress } from '../types.ts';
 import './GuidedTutorialOverlay.css';
 
 interface GuidedTutorialOverlayProps {
@@ -10,8 +13,6 @@ interface GuidedTutorialOverlayProps {
   totalLessons: number;
   stepNumber: number;
   totalSteps: number;
-  complete: boolean;
-  onNext: () => void;
 }
 
 interface SpotlightRect {
@@ -22,6 +23,12 @@ interface SpotlightRect {
   width: number;
   height: number;
 }
+
+const INITIAL_PROGRESS: TutorialProgress = {
+  lessonIndex: 0,
+  stepIndex: 0,
+  completedLessonIds: [],
+};
 
 const EDGE = 10;
 const GAP = 14;
@@ -87,10 +94,10 @@ export function GuidedTutorialOverlay({
   totalLessons,
   stepNumber,
   totalSteps,
-  complete,
-  onNext,
 }: GuidedTutorialOverlayProps) {
+  const [progress, setProgress] = useLocalStorage<TutorialProgress>('randomedit.progress.v1', INITIAL_PROGRESS);
   const [rect, setRect] = useState<SpotlightRect | null>(null);
+  const complete = Boolean(progress.stepComplete);
 
   useEffect(() => {
     if (!step?.target) {
@@ -184,7 +191,12 @@ export function GuidedTutorialOverlay({
         ) : null}
 
         {complete ? (
-          <button className="guided-next" type="button" onClick={onNext} autoFocus>
+          <button
+            className="guided-next"
+            type="button"
+            onClick={() => setProgress((current) => continueTutorial(current, lessons))}
+            autoFocus
+          >
             Next
             <ArrowRight size={17} />
           </button>
