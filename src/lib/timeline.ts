@@ -70,6 +70,28 @@ export function sourceToSequenceTime(clips: Clip[], clipIndex: number, sourceTim
   return sequenceTime + withinClip;
 }
 
+export function sequenceTimeAfterEdit(
+  beforeClips: Clip[],
+  beforeSequenceTime: number,
+  afterClips: Clip[],
+): number {
+  const mapped = sequenceToSourceTime(beforeClips, beforeSequenceTime);
+  const beforeClip = mapped.clipIndex >= 0 ? beforeClips[mapped.clipIndex] : undefined;
+
+  if (beforeClip) {
+    const afterIndex = afterClips.findIndex((clip) => (
+      clip.id === beforeClip.id
+      && mapped.sourceTime >= clip.sourceStart
+      && mapped.sourceTime <= clip.sourceEnd
+    ));
+    if (afterIndex >= 0) {
+      return sourceToSequenceTime(afterClips, afterIndex, mapped.sourceTime);
+    }
+  }
+
+  return Math.max(0, Math.min(beforeSequenceTime, sequenceDuration(afterClips)));
+}
+
 export function splitClip(clips: Clip[], clipId: string, sourceTime: number): Clip[] {
   const index = clips.findIndex((clip) => clip.id === clipId);
   if (index < 0) return clips;
