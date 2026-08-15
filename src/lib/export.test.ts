@@ -32,6 +32,37 @@ test('rejects unsupported project versions', () => {
   assert.throws(() => parseProject('{"version":2,"name":"old"}'), /version/i);
 });
 
+test('rejects malformed clip boundaries', () => {
+  const malformed = {
+    ...project,
+    clips: [{ id: 'a', name: 'practice.mp4', sourceStart: 1, sourceEnd: 'three' }],
+  };
+  assert.throws(() => parseProject(JSON.stringify(malformed)), /invalid project/i);
+});
+
+test('rejects invalid nested settings', () => {
+  const malformed = {
+    ...project,
+    settings: { ...project.settings, exportFormat: 'mov' },
+  };
+  assert.throws(() => parseProject(JSON.stringify(malformed)), /invalid project/i);
+});
+
+test('rejects missing tutorial or shortcut state', () => {
+  const { tutorial: _tutorial, ...withoutTutorial } = project;
+  const { shortcutBindings: _bindings, ...withoutBindings } = project;
+  assert.throws(() => parseProject(JSON.stringify(withoutTutorial)), /invalid project/i);
+  assert.throws(() => parseProject(JSON.stringify(withoutBindings)), /invalid project/i);
+});
+
+test('rejects invalid source metadata', () => {
+  const malformed = {
+    ...project,
+    source: { ...project.source!, duration: -2 },
+  };
+  assert.throws(() => parseProject(JSON.stringify(malformed)), /invalid project/i);
+});
+
 test('writes an ordered CMX-style EDL with source and record timecodes', () => {
   const edl = toEdl(project);
   assert.match(edl, /TITLE: Practice Cut/);
