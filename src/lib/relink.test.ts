@@ -21,7 +21,7 @@ test('accepts the expected source duration within media metadata tolerance', () 
 });
 
 test('rejects a relink whose duration does not match the exported source', () => {
-  const actual = { ...expected, duration: 30 };
+  const actual = { ...expected, duration: 58 };
   assert.match(validateRelinkSource(expected, actual, clips) ?? '', /duration/i);
 });
 
