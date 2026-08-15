@@ -25,7 +25,7 @@ import {
   splitClip,
   trimClip,
 } from './lib/timeline.ts';
-import { applyTutorialEvent } from './lib/tutorial.ts';
+import { applyTutorialEvent, continueTutorial, type TutorialStep } from './lib/tutorial.ts';
 import type {
   Clip,
   EditorSettings,
@@ -53,6 +53,38 @@ const INITIAL_PROGRESS: TutorialProgress = {
 };
 
 type DialogName = 'settings' | 'shortcuts' | 'progress' | 'export' | null;
+
+const COMMAND_TUTORIAL_EVENT: Record<string, string> = {
+  playPause: 'transport.played',
+  shuttleForward: 'transport.shuttleForward',
+  frameForward: 'transport.frameStep',
+  markIn: 'mark.in',
+  markOut: 'mark.out',
+  addEdit: 'clip.split',
+  rippleDelete: 'clip.rippleDeleted',
+};
+
+function getOverlayStep(step: TutorialStep | undefined, openDialog: DialogName): TutorialStep | undefined {
+  if (!step) return undefined;
+
+  if (step.id === 'settings' && openDialog === 'settings') {
+    return {
+      ...step,
+      target: 'settings-options',
+      simpleBody: 'Change any one highlighted setting. The tutorial will notice the change and unlock Next.',
+    };
+  }
+
+  if (step.id === 'export-project' && openDialog === 'export') {
+    return {
+      ...step,
+      target: 'download-project',
+      simpleBody: 'Click the highlighted Download project button. This saves your edit decisions as a portable project file.',
+    };
+  }
+
+  return step;
+}
 
 function cleanFilename(name: string): string {
   const clean = name.trim().replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '');
@@ -123,13 +155,18 @@ export default function App() {
   const currentStep = currentLesson && progress.stepIndex < currentLesson.steps.length
     ? currentLesson.steps[progress.stepIndex]
     : undefined;
+  const overlayStep = useMemo(() => getOverlayStep(currentStep, openDialog), [currentStep, openDialog]);
   const courseComplete = progress.completedLessonIds.length === lessons.length;
+  const requiredTutorialEvent = currentStep && !progress.stepComplete ? currentStep.requiredEvent : null;
 
   const progressPercent = useMemo(() => {
     const totalSteps = lessons.reduce((total, lesson) => total + lesson.steps.length, 0);
     const done = lessons.reduce((total, lesson, index) => {
       if (progress.completedLessonIds.includes(lesson.id)) return total + lesson.steps.length;
-      if (index === progress.lessonIndex) return total + Math.min(progress.stepIndex, lesson.steps.length);
+      if (index === progress.lessonIndex) {
+        const currentDone = progress.stepIndex + (progress.stepComplete ? 1 : 0);
+        return total + Math.min(currentDone, lesson.steps.length);
+      }
       return total;
     }, 0);
     return Math.round((done / Math.max(1, totalSteps)) * 100);
@@ -138,6 +175,16 @@ export default function App() {
   const emitTutorialEvent = useCallback((type: string, payload?: Record<string, unknown>) => {
     setProgress((current) => applyTutorialEvent(current, { type, payload }, lessons));
   }, [setProgress]);
+
+  const handleTutorialNext = useCallback(() => {
+    if (
+      (currentStep?.id === 'settings' && openDialog === 'settings')
+      || (currentStep?.id === 'export-project' && openDialog === 'export')
+    ) {
+      setOpenDialog(null);
+    }
+    setProgress((current) => continueTutorial(current, lessons));
+  }, [currentStep?.id, openDialog, setProgress]);
 
   const clearBackwardTimer = useCallback(() => {
     if (backwardTimerRef.current !== null) {
@@ -492,12 +539,13 @@ export default function App() {
       const shortcut = normalizeShortcut(event);
       const command = Object.entries(shortcutBindings).find(([, binding]) => binding === shortcut)?.[0];
       if (!command) return;
+      if (requiredTutorialEvent && COMMAND_TUTORIAL_EVENT[command] !== requiredTutorialEvent) return;
       event.preventDefault();
       dispatchCommand(command);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dispatchCommand, openDialog, shortcutBindings]);
+  }, [dispatchCommand, openDialog, requiredTutorialEvent, shortcutBindings]);
 
   const handleShowMe = useCallback((target?: string) => {
     if (!target) return;
@@ -672,9 +720,12 @@ export default function App() {
         <CoachPanel
           lesson={currentLesson}
           step={currentStep}
+          overlayStep={overlayStep}
           lessonNumber={Math.min(progress.lessonIndex + 1, lessons.length)}
           totalLessons={lessons.length}
           courseComplete={courseComplete}
+          stepComplete={Boolean(progress.stepComplete)}
+          onNext={handleTutorialNext}
           onShowMe={handleShowMe}
         />
       </div>
