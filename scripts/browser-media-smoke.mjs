@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -20,9 +21,28 @@ function findChrome() {
   throw new Error('Chrome/Chromium was not found. Set CHROME_PATH or install a Chromium browser.');
 }
 
-async function waitForDebugger(port) {
+async function reserveFreePort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    server.close();
+    throw new Error('Could not reserve a local port for Chrome DevTools.');
+  }
+  const port = address.port;
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+
+async function waitForDebugger(port, processHandle) {
   let lastError;
-  for (let attempt = 0; attempt < 60; attempt += 1) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (processHandle.exitCode !== null) {
+      throw new Error(`Chrome exited before the DevTools endpoint became ready (exit ${processHandle.exitCode}).`);
+    }
     try {
       const response = await fetch(`http://127.0.0.1:${port}/json/list`);
       if (response.ok) {
@@ -35,7 +55,7 @@ async function waitForDebugger(port) {
     }
     await delay(100);
   }
-  throw new Error(`Chrome DevTools endpoint did not become ready.${lastError ? ` ${String(lastError)}` : ''}`);
+  throw new Error(`Chrome DevTools endpoint did not become ready within 20 seconds.${lastError ? ` ${String(lastError)}` : ''}`);
 }
 
 async function connectDebugger(url) {
@@ -158,7 +178,7 @@ const expression = String.raw`(async () => {
 
 const chrome = findChrome();
 const directory = mkdtempSync(join(tmpdir(), 'randomedit-chrome-profile-'));
-const port = 9222;
+const port = await reserveFreePort();
 let stderr = '';
 const processHandle = spawn(chrome, [
   '--headless=new',
@@ -166,6 +186,7 @@ const processHandle = spawn(chrome, [
   '--disable-gpu',
   '--disable-dev-shm-usage',
   '--disable-background-timer-throttling',
+  '--remote-debugging-address=127.0.0.1',
   `--remote-debugging-port=${port}`,
   `--user-data-dir=${directory}`,
   'about:blank',
@@ -176,7 +197,7 @@ processHandle.stderr.on('data', (chunk) => {
 });
 
 try {
-  const debuggerUrl = await waitForDebugger(port);
+  const debuggerUrl = await waitForDebugger(port, processHandle);
   const debuggerClient = await connectDebugger(debuggerUrl);
   try {
     await debuggerClient.send('Runtime.enable');
