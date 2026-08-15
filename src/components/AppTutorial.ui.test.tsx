@@ -295,7 +295,7 @@ describe('guided tutorial integration', () => {
     expect(document.activeElement).toBe(settings);
   });
 
-  it('requires separate project JSON and EDL downloads before completing handoff', async () => {
+  it('requires review capability plus separate project JSON and EDL handoff steps', async () => {
     await renderApp({ lessonIndex: 6, stepIndex: 0, completedLessonIds: completedBefore(6), stepComplete: false });
     const settingsButton = document.querySelector('[data-tutorial-key="settings"]');
     expect(settingsButton).not.toBeNull();
@@ -308,6 +308,16 @@ describe('guided tutorial integration', () => {
     const nextAfterSettings = document.querySelector('.guided-next');
     expect(nextAfterSettings).not.toBeNull();
     await click(nextAfterSettings!);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+    const reviewExportButton = document.querySelector('[data-tutorial-key="export-project"]');
+    expect(reviewExportButton).not.toBeNull();
+    await click(reviewExportButton!);
+    const renderReview = document.querySelector('[data-tutorial-key="render-review"]') as HTMLButtonElement | null;
+    expect(renderReview).not.toBeNull();
+    expect(renderReview?.disabled).toBe(true);
+    expect(document.querySelector('.guided-next')).not.toBeNull();
+    await click(document.querySelector('.guided-next')!);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
 
     const exportButton = document.querySelector('[data-tutorial-key="export-project"]');
@@ -329,7 +339,6 @@ describe('guided tutorial integration', () => {
     expect(downloadEdl).not.toBeNull();
     await click(downloadEdl!);
     const nextAfterEdl = document.querySelector('.guided-next');
-    expect(downloadEdl).not.toBeNull();
     expect(nextAfterEdl).not.toBeNull();
     await click(nextAfterEdl!);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
