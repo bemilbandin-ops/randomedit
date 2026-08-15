@@ -244,6 +244,33 @@ describe('guided tutorial integration', () => {
     expect(otherClick).toHaveBeenCalledTimes(1);
   });
 
+  it('focuses dialogs, closes them with Escape, and restores focus to the opener', async () => {
+    await renderApp({
+      lessonIndex: lessons.length - 1,
+      stepIndex: lessons[lessons.length - 1].steps.length,
+      completedLessonIds: lessons.map((lesson) => lesson.id),
+      stepComplete: false,
+    });
+
+    const settings = document.querySelector('[data-tutorial-key="settings"]') as HTMLButtonElement | null;
+    expect(settings).not.toBeNull();
+    settings!.focus();
+    await click(settings!);
+
+    const dialog = document.querySelector('[role="dialog"]');
+    const close = document.querySelector('[aria-label="Close dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(close).not.toBeNull();
+    expect(document.activeElement).toBe(close);
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(settings);
+  });
+
   it('guides Settings inside the modal, closes it on Next, then guides the actual project download', async () => {
     await renderApp({
       lessonIndex: 6,
