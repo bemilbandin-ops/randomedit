@@ -172,11 +172,12 @@ export function parseProject(json: string): ProjectState {
   };
 }
 
-function toTimecode(seconds: number, fpsValue: number): string {
-  const fps = Math.max(1, Math.round(fpsValue));
-  const totalFrames = Math.max(0, Math.round(seconds * fps));
-  const frames = totalFrames % fps;
-  const totalSeconds = Math.floor(totalFrames / fps);
+export function formatTimecode(seconds: number, fpsValue: number): string {
+  const actualFps = Math.max(0.001, fpsValue);
+  const nominalFps = Math.max(1, Math.round(actualFps));
+  const totalFrames = Math.max(0, Math.round(seconds * actualFps));
+  const frames = totalFrames % nominalFps;
+  const totalSeconds = Math.floor(totalFrames / nominalFps);
   const secs = totalSeconds % 60;
   const totalMinutes = Math.floor(totalSeconds / 60);
   const minutes = totalMinutes % 60;
@@ -195,10 +196,10 @@ export function toEdl(project: ProjectState): string {
   project.clips.forEach((clip, index) => {
     const duration = Math.max(0, clip.sourceEnd - clip.sourceStart);
     const event = String(index + 1).padStart(3, '0');
-    const sourceIn = toTimecode(clip.sourceStart, fps);
-    const sourceOut = toTimecode(clip.sourceEnd, fps);
-    const recordIn = toTimecode(recordTime, fps);
-    const recordOut = toTimecode(recordTime + duration, fps);
+    const sourceIn = formatTimecode(clip.sourceStart, fps);
+    const sourceOut = formatTimecode(clip.sourceEnd, fps);
+    const recordIn = formatTimecode(recordTime, fps);
+    const recordOut = formatTimecode(recordTime + duration, fps);
 
     lines.push(`${event}  AX       V     C        ${sourceIn} ${sourceOut} ${recordIn} ${recordOut}`);
     lines.push(`* FROM CLIP NAME: ${clip.name}`);
