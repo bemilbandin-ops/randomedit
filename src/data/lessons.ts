@@ -10,6 +10,7 @@ export const lessons: TutorialLesson[] = [
         id: 'play-example',
         title: 'Play the example clip',
         body: 'Press Space or the play button. Watch the playhead move while the viewer plays.',
+        simpleBody: 'Click the highlighted Play button. This starts and stops the video, just like a normal video player.',
         requiredEvent: 'transport.played',
         target: 'play-toggle',
         shortcut: 'Space',
@@ -18,8 +19,13 @@ export const lessons: TutorialLesson[] = [
       },
       {
         id: 'seek-example',
-        title: 'Move the playhead',
+        title: 'Move to another moment',
         body: 'Click somewhere on the timeline ruler. The viewer should jump to that moment.',
+        simpleBody: 'Click anywhere in the highlighted timeline area. The vertical line will jump there and the video will show that exact moment.',
+        term: {
+          name: 'Playhead',
+          meaning: 'The vertical line that shows where you currently are in the video.',
+        },
         requiredEvent: 'timeline.seeked',
         target: 'timeline-ruler',
         professionalName: 'Playhead / Current Time Indicator',
@@ -34,8 +40,13 @@ export const lessons: TutorialLesson[] = [
     steps: [
       {
         id: 'upload',
-        title: 'Import a video',
+        title: 'Use your own video',
         body: 'Choose a local video. Your source becomes a new sequence clip automatically.',
+        simpleBody: 'Click the highlighted Upload video button and choose any video from your computer. From here on, the tutorial uses your clip.',
+        term: {
+          name: 'Source media',
+          meaning: 'The original video file you imported. Editing does not change that original file.',
+        },
         requiredEvent: 'media.imported',
         target: 'upload-media',
         professionalName: 'Import Media',
@@ -50,8 +61,13 @@ export const lessons: TutorialLesson[] = [
     steps: [
       {
         id: 'shuttle',
-        title: 'Shuttle forward with L',
+        title: 'Play forward with L',
         body: 'Press L. Press K to stop. J, K and L form the classic editor transport cluster.',
+        simpleBody: 'Press L on your keyboard. Editors use J, K and L to move backward, stop, and move forward without reaching for the mouse.',
+        term: {
+          name: 'Shuttle',
+          meaning: 'Moving through video forward or backward with playback controls.',
+        },
         requiredEvent: 'transport.shuttleForward',
         target: 'transport-controls',
         shortcut: 'L',
@@ -60,8 +76,13 @@ export const lessons: TutorialLesson[] = [
       },
       {
         id: 'frame-step',
-        title: 'Step one frame',
+        title: 'Move exactly one frame',
         body: 'Press the Right Arrow once to move forward exactly one sequence frame.',
+        simpleBody: 'Press the Right Arrow once. The video moves by only one tiny image instead of playing normally.',
+        term: {
+          name: 'Frame',
+          meaning: 'One single image in a video. At 25 fps, one second contains 25 frames.',
+        },
         requiredEvent: 'transport.frameStep',
         target: 'frame-step-forward',
         shortcut: 'Right Arrow',
@@ -77,8 +98,13 @@ export const lessons: TutorialLesson[] = [
     steps: [
       {
         id: 'mark-in',
-        title: 'Set an In point',
+        title: 'Mark where a useful part starts',
         body: 'Move to the start of a useful moment and press I.',
+        simpleBody: 'Move to a moment you like, then press I. You are telling the editor: start my chosen section here.',
+        term: {
+          name: 'In point',
+          meaning: 'The place where a chosen section starts.',
+        },
         requiredEvent: 'mark.in',
         target: 'mark-in',
         shortcut: 'I',
@@ -87,8 +113,13 @@ export const lessons: TutorialLesson[] = [
       },
       {
         id: 'mark-out',
-        title: 'Set an Out point',
+        title: 'Mark where the useful part ends',
         body: 'Move later in the clip and press O. The selected source range appears above the timeline.',
+        simpleBody: 'Move later in the clip, then press O. Now you have a start and an end for the part you want.',
+        term: {
+          name: 'Out point',
+          meaning: 'The place where a chosen section ends.',
+        },
         requiredEvent: 'mark.out',
         target: 'mark-out',
         shortcut: 'O',
@@ -104,8 +135,13 @@ export const lessons: TutorialLesson[] = [
     steps: [
       {
         id: 'split',
-        title: 'Add an edit at the playhead',
+        title: 'Cut the clip in two',
         body: 'Place the playhead inside the selected clip and use Add Edit / Split Clip.',
+        simpleBody: 'Put the playhead inside the clip, then click the highlighted split control. One clip becomes two pieces at that exact spot.',
+        term: {
+          name: 'Cut / edit point',
+          meaning: 'The boundary between two timeline pieces. It does not damage the original video file.',
+        },
         requiredEvent: 'clip.split',
         target: 'split-clip',
         shortcut: 'Ctrl/Cmd+K · Resolve: Ctrl/Cmd+B',
@@ -116,6 +152,7 @@ export const lessons: TutorialLesson[] = [
         id: 'select',
         title: 'Select one side of the cut',
         body: 'Click either new timeline clip so only that edit segment is selected.',
+        simpleBody: 'Click either of the two new pieces. The selected piece is the one later edit commands will affect.',
         requiredEvent: 'clip.selected',
         target: 'timeline-clips',
         professionalName: 'Selection',
@@ -132,6 +169,7 @@ export const lessons: TutorialLesson[] = [
         id: 'trim',
         title: 'Trim to the playhead',
         body: 'Move the playhead inside the selected clip, then trim its start or end to that position.',
+        simpleBody: 'Move the playhead inside the selected piece, then use one of the highlighted trim buttons. Trimming shortens a clip without changing the original file.',
         requiredEvent: 'clip.trimmed',
         target: 'trim-controls',
         professionalName: 'Trim Edit',
@@ -139,8 +177,13 @@ export const lessons: TutorialLesson[] = [
       },
       {
         id: 'ripple',
-        title: 'Ripple delete a segment',
+        title: 'Delete and close the gap',
         body: 'Select a clip and use Ripple Delete. The following clip closes the gap automatically.',
+        simpleBody: 'Select a piece and click Ripple Delete. It removes that piece and automatically pulls everything after it left so there is no empty gap.',
+        term: {
+          name: 'Ripple',
+          meaning: 'An edit that changes timing for the clips after it by closing or opening space.',
+        },
         requiredEvent: 'clip.rippleDeleted',
         target: 'ripple-delete',
         shortcut: 'Shift+Delete',
@@ -158,6 +201,7 @@ export const lessons: TutorialLesson[] = [
         id: 'settings',
         title: 'Change one delivery setting',
         body: 'Open Settings and change playback speed, sequence frame rate, resolution, export fps or format.',
+        simpleBody: 'Open the highlighted Settings button and change any one option. These are the basic choices that control playback and final output.',
         requiredEvent: 'settings.changed',
         target: 'settings',
         professionalName: 'Sequence / Deliver Settings',
@@ -167,6 +211,11 @@ export const lessons: TutorialLesson[] = [
         id: 'export-project',
         title: 'Export the project',
         body: 'Download the project package. It contains edit decisions plus an EDL for quick review.',
+        simpleBody: 'Open Export and download the project package. This saves your edit decisions so someone can review the work without guessing what you changed.',
+        term: {
+          name: 'EDL',
+          meaning: 'A small text list describing where cuts happen and which source times they use.',
+        },
         requiredEvent: 'project.exported',
         target: 'export-project',
         professionalName: 'Project / EDL Export',
