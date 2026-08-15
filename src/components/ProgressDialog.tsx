@@ -1,4 +1,5 @@
 import { CheckCircle2, Circle, RotateCcw } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { Modal } from './Modal.tsx';
 import type { TutorialLesson } from '../lib/tutorial.ts';
 import type { TutorialProgress } from '../types.ts';
@@ -12,10 +13,12 @@ interface ProgressDialogProps {
 }
 
 export function ProgressDialog({ lessons, progress, percent, onReset, onClose }: ProgressDialogProps) {
+  const ringStyle = { '--progress': `${percent * 3.6}deg` } as CSSProperties;
+
   return (
     <Modal title="Learning progress" subtitle="Progress is saved in this browser." onClose={onClose}>
       <div className="progress-summary">
-        <div className="progress-ring" style={{ '--progress': `${percent * 3.6}deg` } as React.CSSProperties}>
+        <div className="progress-ring" style={ringStyle}>
           <span>{percent}%</span>
         </div>
         <div>
