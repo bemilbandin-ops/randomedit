@@ -19,7 +19,7 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsDialogPr
       subtitle="Change playback, sequence timing, and review-export defaults."
       onClose={onClose}
     >
-      <div className="settings-grid">
+      <div className="settings-grid" data-tutorial-key="settings-options">
         <label className="field">
           <span>Playback speed</span>
           <select

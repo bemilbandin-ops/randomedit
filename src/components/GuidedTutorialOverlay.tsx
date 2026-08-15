@@ -1,10 +1,7 @@
 import { ArrowRight, CheckCircle2, Crosshair } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { lessons } from '../data/lessons.ts';
-import { useLocalStorage } from '../hooks/useLocalStorage.ts';
-import { continueTutorial, type TutorialStep } from '../lib/tutorial.ts';
-import type { TutorialProgress } from '../types.ts';
+import type { TutorialStep } from '../lib/tutorial.ts';
 import './GuidedTutorialOverlay.css';
 
 interface GuidedTutorialOverlayProps {
@@ -13,6 +10,8 @@ interface GuidedTutorialOverlayProps {
   totalLessons: number;
   stepNumber: number;
   totalSteps: number;
+  complete: boolean;
+  onNext: () => void;
 }
 
 interface SpotlightRect {
@@ -23,12 +22,6 @@ interface SpotlightRect {
   width: number;
   height: number;
 }
-
-const INITIAL_PROGRESS: TutorialProgress = {
-  lessonIndex: 0,
-  stepIndex: 0,
-  completedLessonIds: [],
-};
 
 const EDGE = 10;
 const GAP = 14;
@@ -94,10 +87,10 @@ export function GuidedTutorialOverlay({
   totalLessons,
   stepNumber,
   totalSteps,
+  complete,
+  onNext,
 }: GuidedTutorialOverlayProps) {
-  const [progress, setProgress] = useLocalStorage<TutorialProgress>('randomedit.progress.v1', INITIAL_PROGRESS);
   const [rect, setRect] = useState<SpotlightRect | null>(null);
-  const complete = Boolean(progress.stepComplete);
 
   useEffect(() => {
     if (!step?.target) {
@@ -134,6 +127,33 @@ export function GuidedTutorialOverlay({
       window.removeEventListener('scroll', update, true);
     };
   }, [step?.id, step?.target]);
+
+  useEffect(() => {
+    if (!step?.target) return undefined;
+
+    const target = document.querySelector<HTMLElement>(`[data-tutorial-key="${step.target}"]`);
+    if (!target) return undefined;
+
+    const blockUnrelatedClick = (event: MouseEvent) => {
+      const clicked = event.target instanceof Element ? event.target : null;
+      if (!clicked) return;
+
+      const completedTargetIsSafe = complete && step.requiredEvent === 'transport.played';
+      const targetIsAllowed = (!complete || completedTargetIsSafe) && target.contains(clicked);
+      const allowed = targetIsAllowed
+        || Boolean(clicked.closest('.guided-card'))
+        || Boolean(clicked.closest('.coach-show'))
+        || Boolean(clicked.closest('[aria-label="Close dialog"]'));
+
+      if (allowed) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+    };
+
+    document.addEventListener('click', blockUnrelatedClick, true);
+    return () => document.removeEventListener('click', blockUnrelatedClick, true);
+  }, [complete, step?.id, step?.requiredEvent, step?.target]);
 
   const cardStyle = useMemo(() => (rect ? getCardStyle(rect) : undefined), [rect]);
 
@@ -191,12 +211,7 @@ export function GuidedTutorialOverlay({
         ) : null}
 
         {complete ? (
-          <button
-            className="guided-next"
-            type="button"
-            onClick={() => setProgress((current) => continueTutorial(current, lessons))}
-            autoFocus
-          >
+          <button className="guided-next" type="button" onClick={onNext} autoFocus>
             Next
             <ArrowRight size={17} />
           </button>
