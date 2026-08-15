@@ -14,17 +14,20 @@ import { getPresetBindings } from './data/shortcuts.ts';
 import { useLocalStorage } from './hooks/useLocalStorage.ts';
 import { downloadBlob, downloadText } from './lib/download.ts';
 import { formatTimecode, parseProject, serializeProject, toEdl } from './lib/export.ts';
-import { validateRelinkSource } from './lib/relink.ts';
+import { fingerprintMediaFile, validateRelinkSource } from './lib/relink.ts';
 import { renderReviewVideo, reviewExportCapability } from './lib/renderReview.ts';
 import { normalizeShortcut } from './lib/shortcuts.ts';
 import {
+  applySourceRange,
   moveClip,
   rippleDeleteClip,
   sequenceDuration,
   sequenceTimeAfterEdit,
   sequenceToSourceTime,
+  snapTimeToFrame,
   sourceToSequenceTime,
   splitClip,
+  summarizeAudioSamples,
   trimClip,
 } from './lib/timeline.ts';
 import { applyTutorialEvent, continueTutorial, type TutorialStep } from './lib/tutorial.ts';
@@ -33,12 +36,14 @@ import type {
   EditorSettings,
   Marker,
   ProjectState,
+  ShortcutBaseProfile,
   ShortcutProfile,
   SourceMeta,
   TutorialProgress,
 } from './types.ts';
 
 const DEMO_VIDEO = 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4';
+const AUDIO_WAVEFORM_BUCKETS = 240;
 
 const DEFAULT_SETTINGS: EditorSettings = {
   playbackSpeed: 1,
@@ -55,6 +60,12 @@ const INITIAL_PROGRESS: TutorialProgress = {
 };
 
 type DialogName = 'settings' | 'shortcuts' | 'progress' | 'export' | null;
+
+interface PendingMediaAnalysis {
+  fileSize: number;
+  fingerprint?: string;
+  audioPeaks: number[] | null;
+}
 
 function getOverlayStep(step: TutorialStep | undefined, openDialog: DialogName): TutorialStep | undefined {
   if (!step) return undefined;
@@ -91,13 +102,39 @@ function cleanFilename(name: string): string {
   return clean || 'random-edit-project';
 }
 
-function sourceMetaFromVideo(video: HTMLVideoElement, name: string): SourceMeta {
+function sourceReelFromName(name: string): string {
+  const stem = name.replace(/\.[^.]+$/, '');
+  const clean = stem.toUpperCase().replace(/[^A-Z0-9_-]+/g, '').slice(0, 8);
+  return clean || 'AX';
+}
+
+function sourceMetaFromVideo(
+  video: HTMLVideoElement,
+  name: string,
+  analysis: PendingMediaAnalysis | null,
+): SourceMeta {
   return {
     name,
     duration: Number.isFinite(video.duration) ? video.duration : 0,
     width: video.videoWidth || 1920,
     height: video.videoHeight || 1080,
+    ...(analysis ? { fileSize: analysis.fileSize } : {}),
+    ...(analysis?.fingerprint ? { fingerprint: analysis.fingerprint } : {}),
   };
+}
+
+async function decodeAudioPeaks(file: File): Promise<number[] | null> {
+  if (typeof AudioContext === 'undefined') return null;
+  const context = new AudioContext();
+  try {
+    const decoded = await context.decodeAudioData(await file.arrayBuffer());
+    if (decoded.numberOfChannels < 1 || decoded.length < 1) return null;
+    return summarizeAudioSamples(decoded.getChannelData(0), AUDIO_WAVEFORM_BUCKETS);
+  } catch {
+    return null;
+  } finally {
+    void context.close().catch(() => undefined);
+  }
 }
 
 export default function App() {
@@ -105,7 +142,7 @@ export default function App() {
   const [settings, setSettings] = useLocalStorage<EditorSettings>('randomedit.settings.v1', DEFAULT_SETTINGS);
   const [progress, setProgress] = useLocalStorage<TutorialProgress>('randomedit.progress.v1', INITIAL_PROGRESS);
   const [shortcutProfile, setShortcutProfile] = useLocalStorage<ShortcutProfile>('randomedit.shortcut-profile.v1', 'premiere');
-  const [shortcutBaseProfile, setShortcutBaseProfile] = useLocalStorage<'premiere' | 'resolve'>('randomedit.shortcut-base.v1', 'premiere');
+  const [shortcutBaseProfile, setShortcutBaseProfile] = useLocalStorage<ShortcutBaseProfile>('randomedit.shortcut-base.v1', 'premiere');
   const [shortcutBindings, setShortcutBindings] = useLocalStorage(
     'randomedit.shortcuts.v1',
     getPresetBindings('premiere', isMac),
@@ -115,6 +152,7 @@ export default function App() {
   const [sourceUrl, setSourceUrl] = useState(DEMO_VIDEO);
   const [sourceName, setSourceName] = useState('MDN flower example');
   const [source, setSource] = useState<SourceMeta | null>(null);
+  const [audioPeaks, setAudioPeaks] = useState<number[] | null>(null);
   const [isDemo, setIsDemo] = useState(true);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [clips, setClips] = useState<Clip[]>([]);
@@ -134,6 +172,7 @@ export default function App() {
   const activeClipIndexRef = useRef(0);
   const objectUrlRef = useRef<string | null>(null);
   const pendingImportEventRef = useRef(false);
+  const pendingMediaAnalysisRef = useRef<PendingMediaAnalysis | null>(null);
   const relinkingProjectRef = useRef(false);
   const backwardTimerRef = useRef<number | null>(null);
   const clipHistoryRef = useRef<Clip[][]>([]);
@@ -218,37 +257,54 @@ export default function App() {
   }, [clips, syncVideoToClips]);
 
   const seekSequence = useCallback((time: number, tutorialSeek = false) => {
-    const next = Math.max(0, Math.min(duration, time));
+    const snapped = snapTimeToFrame(time, settings.sequenceFps);
+    const next = Math.max(0, Math.min(duration, snapped));
     setSequenceTime(next);
     syncVideoToSequence(next);
     if (tutorialSeek) emitTutorialEvent('timeline.seeked');
-  }, [duration, emitTutorialEvent, syncVideoToSequence]);
+  }, [duration, emitTutorialEvent, settings.sequenceFps, syncVideoToSequence]);
 
   const handleLoadedMetadata = useCallback(() => {
     const video = videoRef.current;
     if (!video || !Number.isFinite(video.duration) || video.duration <= 0) return;
 
-    const nextSource = sourceMetaFromVideo(video, sourceName);
+    const analysis = pendingMediaAnalysisRef.current;
+    const actualSource = sourceMetaFromVideo(video, sourceName, analysis);
     video.playbackRate = settings.playbackSpeed;
 
     if (relinkingProjectRef.current) {
-      const relinkError = validateRelinkSource(source, nextSource, clips);
+      const relinkError = validateRelinkSource(source, actualSource, clips);
       if (relinkError) {
         setMediaError(relinkError);
         setRenderMessage(relinkError);
         return;
       }
 
-      setSource(nextSource);
+      setSource({
+        ...actualSource,
+        sourceFps: source?.sourceFps ?? settings.sequenceFps,
+        startTimecode: source?.startTimecode ?? '00:00:00:00',
+        reel: source?.reel ?? sourceReelFromName(source?.name ?? sourceName),
+      });
+      setAudioPeaks(analysis?.audioPeaks ?? null);
       setMediaError(null);
       relinkingProjectRef.current = false;
+      pendingMediaAnalysisRef.current = null;
       setExpectedRelinkName(null);
       setSelectedClipId((current) => current ?? clips[0]?.id ?? null);
       seekSequence(0, false);
       return;
     }
 
+    const nextSource: SourceMeta = {
+      ...actualSource,
+      sourceFps: settings.sequenceFps,
+      startTimecode: '00:00:00:00',
+      reel: sourceReelFromName(sourceName),
+    };
     setSource(nextSource);
+    setAudioPeaks(analysis?.audioPeaks ?? null);
+    pendingMediaAnalysisRef.current = null;
     setMediaError(null);
     const firstClip: Clip = {
       id: `source-${Date.now()}`,
@@ -269,7 +325,7 @@ export default function App() {
       pendingImportEventRef.current = false;
       emitTutorialEvent('media.imported', { filename: sourceName });
     }
-  }, [clips, emitTutorialEvent, seekSequence, settings.playbackSpeed, source, sourceName]);
+  }, [clips, emitTutorialEvent, seekSequence, settings.playbackSpeed, settings.sequenceFps, source, sourceName]);
 
   const handleMediaError = useCallback(() => {
     stopPlayback();
@@ -279,8 +335,18 @@ export default function App() {
     pendingImportEventRef.current = false;
   }, [isDemo, stopPlayback]);
 
-  const handleUpload = useCallback((file: File) => {
+  const handleUpload = useCallback(async (file: File) => {
     stopPlayback();
+    const [fingerprintResult, decodedPeaks] = await Promise.all([
+      fingerprintMediaFile(file).catch(() => undefined),
+      decodeAudioPeaks(file),
+    ]);
+    pendingMediaAnalysisRef.current = {
+      fileSize: file.size,
+      fingerprint: fingerprintResult,
+      audioPeaks: decodedPeaks,
+    };
+
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     const nextUrl = URL.createObjectURL(file);
     objectUrlRef.current = nextUrl;
@@ -293,6 +359,7 @@ export default function App() {
       setMarkIn(null);
       setMarkOut(null);
       setMarkers([]);
+      setAudioPeaks(null);
       setSequenceTime(0);
     }
 
@@ -388,19 +455,23 @@ export default function App() {
 
   const currentSourceTime = useCallback(() => {
     const mapped = sequenceToSourceTime(clips, sequenceTime);
-    return mapped.clipIndex >= 0 ? mapped.sourceTime : 0;
-  }, [clips, sequenceTime]);
+    return mapped.clipIndex >= 0 ? snapTimeToFrame(mapped.sourceTime, settings.sequenceFps) : 0;
+  }, [clips, sequenceTime, settings.sequenceFps]);
 
   const handleMarkIn = useCallback(() => {
-    setMarkIn(currentSourceTime());
+    const nextIn = currentSourceTime();
+    setMarkIn(nextIn);
+    setMarkOut((current) => (current !== null && current > nextIn ? current : null));
     emitTutorialEvent('mark.in');
   }, [currentSourceTime, emitTutorialEvent]);
 
   const handleMarkOut = useCallback(() => {
     const out = currentSourceTime();
-    setMarkOut(out);
     if (markIn !== null && out > markIn) {
+      setMarkOut(out);
       emitTutorialEvent('mark.out', { markIn, markOut: out });
+    } else {
+      setMarkOut(null);
     }
   }, [currentSourceTime, emitTutorialEvent, markIn]);
 
@@ -413,32 +484,56 @@ export default function App() {
   }, [clips]);
 
   const splitAtSequenceTime = useCallback((time: number) => {
-    const mapped = sequenceToSourceTime(clips, time);
+    const snappedTime = snapTimeToFrame(time, settings.sequenceFps);
+    const mapped = sequenceToSourceTime(clips, snappedTime);
     if (mapped.clipIndex < 0) return;
     const target = clips[mapped.clipIndex];
-    const next = splitClip(clips, target.id, mapped.sourceTime);
+    const next = splitClip(clips, target.id, mapped.sourceTime, settings.sequenceFps);
     if (commitClips(next)) {
       setSelectedClipId(null);
       setActiveTool('selection');
-      setSequenceTime(Math.min(time, sequenceDuration(next)));
-      syncVideoToClips(next, time);
+      const nextTime = Math.min(snappedTime, sequenceDuration(next));
+      setSequenceTime(nextTime);
+      syncVideoToClips(next, nextTime);
       emitTutorialEvent('clip.split');
     }
-  }, [clips, commitClips, emitTutorialEvent, syncVideoToClips]);
+  }, [clips, commitClips, emitTutorialEvent, settings.sequenceFps, syncVideoToClips]);
 
   const handleTrim = useCallback((edge: 'start' | 'end') => {
     if (!selectedClipId) return;
     const mapped = sequenceToSourceTime(clips, sequenceTime);
     const selectedIndex = clips.findIndex((clip) => clip.id === selectedClipId);
     if (selectedIndex < 0 || mapped.clipIndex !== selectedIndex) return;
-    const next = trimClip(clips, selectedClipId, edge, mapped.sourceTime);
+    const next = trimClip(clips, selectedClipId, edge, mapped.sourceTime, settings.sequenceFps);
     if (commitClips(next)) {
       const nextTime = sequenceTimeAfterEdit(clips, sequenceTime, next);
       setSequenceTime(nextTime);
       syncVideoToClips(next, nextTime);
       emitTutorialEvent('clip.trimmed', { edge });
     }
-  }, [clips, commitClips, emitTutorialEvent, selectedClipId, sequenceTime, syncVideoToClips]);
+  }, [clips, commitClips, emitTutorialEvent, selectedClipId, sequenceTime, settings.sequenceFps, syncVideoToClips]);
+
+  const rangeTarget = useMemo(() => {
+    const mapped = sequenceToSourceTime(clips, sequenceTime);
+    return mapped.clipIndex >= 0 ? clips[mapped.clipIndex] : null;
+  }, [clips, sequenceTime]);
+
+  const canApplyRange = useMemo(() => {
+    if (!rangeTarget || markIn === null || markOut === null || markOut <= markIn) return false;
+    return applySourceRange(clips, rangeTarget.id, markIn, markOut, settings.sequenceFps) !== clips;
+  }, [clips, markIn, markOut, rangeTarget, settings.sequenceFps]);
+
+  const handleApplyRange = useCallback(() => {
+    if (!rangeTarget || markIn === null || markOut === null) return;
+    const next = applySourceRange(clips, rangeTarget.id, markIn, markOut, settings.sequenceFps);
+    if (commitClips(next)) {
+      const nextTime = sequenceTimeAfterEdit(clips, sequenceTime, next);
+      setSelectedClipId(rangeTarget.id);
+      setSequenceTime(nextTime);
+      syncVideoToClips(next, nextTime);
+      emitTutorialEvent('range.applied', { markIn, markOut });
+    }
+  }, [clips, commitClips, emitTutorialEvent, markIn, markOut, rangeTarget, sequenceTime, settings.sequenceFps, syncVideoToClips]);
 
   const handleRippleDelete = useCallback(() => {
     if (!selectedClipId || clips.length <= 1) return;
@@ -465,9 +560,9 @@ export default function App() {
   const handleMarker = useCallback(() => {
     setMarkers((current) => [
       ...current,
-      { id: `marker-${Date.now()}`, time: sequenceTime, label: `Marker ${current.length + 1}` },
+      { id: `marker-${Date.now()}`, time: snapTimeToFrame(sequenceTime, settings.sequenceFps), label: `Marker ${current.length + 1}` },
     ]);
-  }, [sequenceTime]);
+  }, [sequenceTime, settings.sequenceFps]);
 
   const handleUndo = useCallback(() => {
     const previous = clipHistoryRef.current.pop();
@@ -497,7 +592,17 @@ export default function App() {
     emitTutorialEvent('settings.changed');
   }, [emitTutorialEvent, setSettings]);
 
-  const handleShortcutProfileChange = useCallback((profile: 'premiere' | 'resolve') => {
+  const handleSourceChange = useCallback((patch: Partial<SourceMeta>) => {
+    if (patch.sourceFps !== undefined && (!Number.isFinite(patch.sourceFps) || patch.sourceFps <= 0)) return;
+    if (patch.startTimecode !== undefined && !/^\d{2,}:\d{2}:\d{2}:\d{2}$/.test(patch.startTimecode)) return;
+    const normalized = patch.reel === undefined
+      ? patch
+      : { ...patch, reel: patch.reel.toUpperCase().replace(/[^A-Z0-9_-]+/g, '').slice(0, 8) || 'AX' };
+    setSource((current) => (current ? { ...current, ...normalized } : current));
+    emitTutorialEvent('settings.changed');
+  }, [emitTutorialEvent]);
+
+  const handleShortcutProfileChange = useCallback((profile: ShortcutBaseProfile) => {
     setShortcutProfile(profile);
     setShortcutBaseProfile(profile);
     setShortcutBindings(getPresetBindings(profile, isMac));
@@ -581,16 +686,17 @@ export default function App() {
   }, []);
 
   const projectSnapshot = useCallback((): ProjectState => ({
-    version: 1,
+    version: 2,
     name: projectName,
     source,
     clips,
     markers,
     settings,
     shortcutProfile,
+    shortcutBaseProfile,
     shortcutBindings,
     tutorial: progress,
-  }), [clips, markers, progress, projectName, settings, shortcutBindings, shortcutProfile, source]);
+  }), [clips, markers, progress, projectName, settings, shortcutBaseProfile, shortcutBindings, shortcutProfile, source]);
 
   const handleDownloadProject = useCallback(() => {
     const project = projectSnapshot();
@@ -603,8 +709,12 @@ export default function App() {
   }, [emitTutorialEvent, projectName, projectSnapshot]);
 
   const handleDownloadEdl = useCallback(() => {
-    downloadText(toEdl(projectSnapshot()), `${cleanFilename(projectName)}.edl`);
-    emitTutorialEvent('edl.exported');
+    try {
+      downloadText(toEdl(projectSnapshot()), `${cleanFilename(projectName)}.edl`);
+      emitTutorialEvent('edl.exported');
+    } catch (error) {
+      setRenderMessage(error instanceof Error ? error.message : 'Could not generate the EDL.');
+    }
   }, [emitTutorialEvent, projectName, projectSnapshot]);
 
   const handleImportProject = useCallback(async (file: File) => {
@@ -614,10 +724,13 @@ export default function App() {
       clipHistoryRef.current = [];
       setProjectName(imported.name);
       setSource(imported.source);
+      setSourceName(imported.source?.name ?? 'Relink source');
       setClips(imported.clips);
       setMarkers(imported.markers ?? []);
+      setAudioPeaks(null);
       setSettings(imported.settings);
       setShortcutProfile(imported.shortcutProfile);
+      setShortcutBaseProfile(imported.shortcutBaseProfile);
       setShortcutBindings(imported.shortcutBindings);
       setProgress(imported.tutorial);
       setSelectedClipId(imported.clips[0]?.id ?? null);
@@ -634,7 +747,7 @@ export default function App() {
     } catch (error) {
       setRenderMessage(error instanceof Error ? error.message : 'Could not import that project file.');
     }
-  }, [setProgress, setSettings, setShortcutBindings, setShortcutProfile, stopPlayback]);
+  }, [setProgress, setSettings, setShortcutBaseProfile, setShortcutBindings, setShortcutProfile, stopPlayback]);
 
   const handleRenderReview = useCallback(async () => {
     const video = videoRef.current;
@@ -674,6 +787,14 @@ export default function App() {
     : shortcutProfile === 'resolve'
       ? 'Resolve keys'
       : 'Custom keys';
+
+  const canSplit = useMemo(() => {
+    const mapped = sequenceToSourceTime(clips, sequenceTime);
+    if (mapped.clipIndex < 0) return false;
+    const clip = clips[mapped.clipIndex];
+    const editTime = snapTimeToFrame(mapped.sourceTime, settings.sequenceFps);
+    return editTime > clip.sourceStart && editTime < clip.sourceEnd;
+  }, [clips, sequenceTime, settings.sequenceFps]);
 
   return (
     <div className="app-shell">
@@ -719,6 +840,8 @@ export default function App() {
             isPlaying={isPlaying}
             activeTool={activeTool}
             hasSelection={Boolean(selectedClipId)}
+            canSplit={canSplit}
+            canApplyRange={canApplyRange}
             onPlayPause={handlePlayPause}
             onShuttleBack={handleShuttleBack}
             onStop={stopPlayback}
@@ -726,6 +849,7 @@ export default function App() {
             onFrameStep={handleFrameStep}
             onMarkIn={handleMarkIn}
             onMarkOut={handleMarkOut}
+            onApplyRange={handleApplyRange}
             onSplit={() => splitAtSequenceTime(sequenceTime)}
             onTrim={handleTrim}
             onRippleDelete={handleRippleDelete}
@@ -738,6 +862,9 @@ export default function App() {
             clips={clips}
             markers={markers}
             sequenceTime={sequenceTime}
+            sequenceFps={settings.sequenceFps}
+            sourceDuration={source?.duration ?? 0}
+            audioPeaks={audioPeaks}
             selectedClipId={selectedClipId}
             activeTool={activeTool}
             onSeek={(time) => seekSequence(time, true)}
@@ -767,7 +894,13 @@ export default function App() {
       </footer>
 
       {openDialog === 'settings' ? (
-        <SettingsDialog settings={settings} onChange={handleSettingsChange} onClose={() => setOpenDialog(null)} />
+        <SettingsDialog
+          settings={settings}
+          source={source}
+          onChange={handleSettingsChange}
+          onSourceChange={handleSourceChange}
+          onClose={() => setOpenDialog(null)}
+        />
       ) : null}
       {openDialog === 'shortcuts' ? (
         <ShortcutDialog
