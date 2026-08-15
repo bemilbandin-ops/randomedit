@@ -22,3 +22,7 @@ jobs:
         with:
           name: randomedit-dist
           path: dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: randomedit-lockfile
+          path: package-lock.json
