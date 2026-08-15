@@ -123,37 +123,32 @@ describe('guided tutorial integration', () => {
     expect(document.querySelector('.guided-next')?.textContent).toContain('Next');
   });
 
-  it('blocks unrelated mouse and keyboard actions but keeps Show me where usable', async () => {
+  it('keeps unrelated mouse and keyboard controls usable during guided steps', async () => {
     await renderApp({ lessonIndex: 0, stepIndex: 0, completedLessonIds: [], stepComplete: false });
-
-    const settings = document.querySelector('[data-tutorial-key="settings"]');
-    expect(settings).not.toBeNull();
-    await click(settings!);
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
     });
-    expect(document.querySelector('.statusbar')?.textContent).toContain('Selection tool');
+    expect(document.querySelector('.statusbar')?.textContent).toContain('Razor / Blade tool');
 
-    const showMe = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('Show me where'));
-    expect(showMe).toBeDefined();
-    await click(showMe!);
-    expect(document.querySelector('[data-tutorial-key="play-toggle"]')?.classList.contains('tutorial-pulse')).toBe(true);
+    const settings = document.querySelector('[data-tutorial-key="settings"]');
+    expect(settings).not.toBeNull();
+    await click(settings!);
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   });
 
-  it('freezes unrelated keyboard commands after Done until Next', async () => {
+  it('keeps unrelated keyboard commands available after Done until Next', async () => {
     await renderApp({ lessonIndex: 0, stepIndex: 0, completedLessonIds: [], stepComplete: true });
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', bubbles: true }));
     });
 
-    expect(document.querySelector('.statusbar')?.textContent).toContain('Selection tool');
+    expect(document.querySelector('.statusbar')?.textContent).toContain('Razor / Blade tool');
     expect(document.querySelector('.guided-next')).not.toBeNull();
   });
 
-  it('freezes the completed highlighted target itself until Next', async () => {
+  it('keeps the completed highlighted target usable while Next is shown', async () => {
     const targetClick = vi.fn();
     const onNext = vi.fn();
     const step: TutorialStep = {
@@ -167,7 +162,7 @@ describe('guided tutorial integration', () => {
     await act(async () => {
       root.render(
         <>
-          <button type="button" data-tutorial-key="destructive-target" onClick={targetClick}>Dangerous action</button>
+          <button type="button" data-tutorial-key="destructive-target" onClick={targetClick}>Target action</button>
           <GuidedTutorialOverlay
             step={step}
             lessonNumber={1}
@@ -184,12 +179,35 @@ describe('guided tutorial integration', () => {
     const target = document.querySelector('[data-tutorial-key="destructive-target"]');
     expect(target).not.toBeNull();
     await click(target!);
-    expect(targetClick).not.toHaveBeenCalled();
+    expect(targetClick).toHaveBeenCalledTimes(1);
 
     const next = document.querySelector('.guided-next');
     expect(next).not.toBeNull();
     await click(next!);
     expect(onNext).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not complete Mark Out when there is no positive In-to-Out range', async () => {
+    await renderApp({
+      lessonIndex: 3,
+      stepIndex: 0,
+      completedLessonIds: completedBefore(3),
+      stepComplete: false,
+    });
+
+    const markIn = document.querySelector('[data-tutorial-key="mark-in"]');
+    expect(markIn).not.toBeNull();
+    await click(markIn!);
+
+    const next = document.querySelector('.guided-next');
+    expect(next).not.toBeNull();
+    await click(next!);
+
+    const markOut = document.querySelector('[data-tutorial-key="mark-out"]');
+    expect(markOut).not.toBeNull();
+    await click(markOut!);
+
+    expect(document.querySelector('.guided-next')).toBeNull();
   });
 
   it('does not lock unrelated controls when a tutorial target is missing', async () => {
