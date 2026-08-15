@@ -2,7 +2,7 @@ import { RotateCcw, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Modal } from './Modal.tsx';
-import { referenceBinding, shortcutCommands } from '../data/shortcuts.ts';
+import { referenceDisplayBinding, shortcutCommands } from '../data/shortcuts.ts';
 import { findShortcutConflict, normalizeShortcut } from '../lib/shortcuts.ts';
 import type { ShortcutBindings, ShortcutProfile } from '../types.ts';
 
@@ -38,8 +38,8 @@ export function ShortcutDialog({
         command.name,
         command.category,
         command.description,
-        referenceBinding(command.id, 'premiere', isMac),
-        referenceBinding(command.id, 'resolve', isMac),
+        referenceDisplayBinding(command.id, 'premiere', isMac),
+        referenceDisplayBinding(command.id, 'resolve', isMac),
         bindings[command.id] ?? '',
       ].join(' ').toLowerCase();
       return haystack.includes(needle);
@@ -140,8 +140,8 @@ export function ShortcutDialog({
               >
                 {recording ? 'Press keys…' : <kbd>{bindings[command.id] || 'Unassigned'}</kbd>}
               </button>
-              <kbd className="reference-key">{referenceBinding(command.id, 'premiere', isMac)}</kbd>
-              <kbd className="reference-key">{referenceBinding(command.id, 'resolve', isMac)}</kbd>
+              <kbd className="reference-key">{referenceDisplayBinding(command.id, 'premiere', isMac)}</kbd>
+              <kbd className="reference-key">{referenceDisplayBinding(command.id, 'resolve', isMac)}</kbd>
               <button className="row-action" type="button" onClick={() => onResetCommand(command.id)}>
                 Reset
               </button>
