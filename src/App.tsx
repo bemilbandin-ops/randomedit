@@ -64,6 +64,8 @@ const COMMAND_TUTORIAL_EVENT: Record<string, string> = {
   rippleDelete: 'clip.rippleDeleted',
 };
 
+const SAFE_COMMANDS_WHEN_STEP_DONE = new Set(['playPause', 'shuttleStop']);
+
 function getOverlayStep(step: TutorialStep | undefined, openDialog: DialogName): TutorialStep | undefined {
   if (!step) return undefined;
 
@@ -157,7 +159,8 @@ export default function App() {
     : undefined;
   const overlayStep = useMemo(() => getOverlayStep(currentStep, openDialog), [currentStep, openDialog]);
   const courseComplete = progress.completedLessonIds.length === lessons.length;
-  const requiredTutorialEvent = currentStep && !progress.stepComplete ? currentStep.requiredEvent : null;
+  const activeTutorialEvent = currentStep?.requiredEvent ?? null;
+  const tutorialStepComplete = Boolean(progress.stepComplete);
 
   const progressPercent = useMemo(() => {
     const totalSteps = lessons.reduce((total, lesson) => total + lesson.steps.length, 0);
@@ -539,13 +542,21 @@ export default function App() {
       const shortcut = normalizeShortcut(event);
       const command = Object.entries(shortcutBindings).find(([, binding]) => binding === shortcut)?.[0];
       if (!command) return;
-      if (requiredTutorialEvent && COMMAND_TUTORIAL_EVENT[command] !== requiredTutorialEvent) return;
+
+      if (activeTutorialEvent) {
+        if (tutorialStepComplete) {
+          if (!SAFE_COMMANDS_WHEN_STEP_DONE.has(command)) return;
+        } else if (COMMAND_TUTORIAL_EVENT[command] !== activeTutorialEvent) {
+          return;
+        }
+      }
+
       event.preventDefault();
       dispatchCommand(command);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dispatchCommand, openDialog, requiredTutorialEvent, shortcutBindings]);
+  }, [activeTutorialEvent, dispatchCommand, openDialog, shortcutBindings, tutorialStepComplete]);
 
   const handleShowMe = useCallback((target?: string) => {
     if (!target) return;
@@ -724,7 +735,7 @@ export default function App() {
           lessonNumber={Math.min(progress.lessonIndex + 1, lessons.length)}
           totalLessons={lessons.length}
           courseComplete={courseComplete}
-          stepComplete={Boolean(progress.stepComplete)}
+          stepComplete={tutorialStepComplete}
           onNext={handleTutorialNext}
           onShowMe={handleShowMe}
         />
