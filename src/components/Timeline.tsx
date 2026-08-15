@@ -1,7 +1,7 @@
 import { GripVertical, Music2, Video } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import type { Clip, Marker } from '../types.ts';
-import { sequenceDuration } from '../lib/timeline.ts';
+import { sequenceDuration, timelineClipClickAction } from '../lib/timeline.ts';
 
 interface TimelineProps {
   clips: Clip[];
@@ -101,7 +101,10 @@ export function Timeline({
                 const rect = event.currentTarget.getBoundingClientRect();
                 const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
                 const localDuration = clip.sourceEnd - clip.sourceStart;
-                onClipClick(clip.id, start + localDuration * Math.max(0, Math.min(1, ratio)));
+                const clickTime = start + localDuration * Math.max(0, Math.min(1, ratio));
+                const action = timelineClipClickAction(activeTool, clip.id, clickTime);
+                onSeek(action.seekTime);
+                onClipClick(clip.id, action.seekTime);
               }}
               title={`${clip.name} · ${clip.sourceStart.toFixed(2)}s–${clip.sourceEnd.toFixed(2)}s`}
               key={clip.id}
