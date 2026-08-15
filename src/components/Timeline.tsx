@@ -1,5 +1,5 @@
 import { GripVertical, Music2, Video } from 'lucide-react';
-import type { MouseEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import type { Clip, Marker } from '../types.ts';
 import { sequenceDuration, timelineClipClickAction } from '../lib/timeline.ts';
 
@@ -40,6 +40,20 @@ export function Timeline({
     onSeek(timeFromPointer(event, duration));
   };
 
+  const handleRulerKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step = Math.max(duration / 100, 0.04);
+    let next: number | null = null;
+
+    if (event.key === 'ArrowLeft') next = sequenceTime - step;
+    if (event.key === 'ArrowRight') next = sequenceTime + step;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = duration;
+    if (next === null) return;
+
+    event.preventDefault();
+    onSeek(Math.max(0, Math.min(duration, next)));
+  };
+
   let cursor = 0;
   const clipGeometry = clips.map((clip) => {
     const clipDuration = Math.max(0, clip.sourceEnd - clip.sourceStart);
@@ -68,6 +82,14 @@ export function Timeline({
       <div
         className={`timeline-ruler ${activeTool === 'razor' ? 'timeline-ruler--razor' : ''}`}
         onClick={handleRulerClick}
+        onKeyDown={handleRulerKeyDown}
+        role="slider"
+        tabIndex={0}
+        aria-label="Timeline playhead"
+        aria-valuemin={0}
+        aria-valuemax={duration}
+        aria-valuenow={Math.min(sequenceTime, duration)}
+        aria-valuetext={`${Math.min(sequenceTime, duration).toFixed(2)} seconds`}
         data-tutorial-key="timeline-ruler"
       >
         {rulerTicks.map((tick) => (
