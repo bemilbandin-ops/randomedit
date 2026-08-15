@@ -1,0 +1,75 @@
+import { CheckCircle2, Crosshair, Keyboard, MoveRight } from 'lucide-react';
+import type { TutorialLesson, TutorialStep } from '../lib/tutorial.ts';
+
+interface CoachPanelProps {
+  lesson?: TutorialLesson;
+  step?: TutorialStep;
+  lessonNumber: number;
+  totalLessons: number;
+  courseComplete: boolean;
+  onShowMe: (target?: string) => void;
+}
+
+export function CoachPanel({
+  lesson,
+  step,
+  lessonNumber,
+  totalLessons,
+  courseComplete,
+  onShowMe,
+}: CoachPanelProps) {
+  if (courseComplete || !lesson || !step) {
+    return (
+      <aside className="coach-panel coach-panel--complete">
+        <CheckCircle2 size={28} />
+        <h2>Foundation complete</h2>
+        <p>You have used the core timeline actions instead of just reading about them.</p>
+        <div className="coach-callout">
+          <strong>Next move</strong>
+          <span>Open Premiere Pro or DaVinci Resolve and repeat the same workflow on a small clip.</span>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="coach-panel" aria-live="polite">
+      <div className="coach-panel__eyeline">
+        <span>Lesson {lessonNumber} / {totalLessons}</span>
+        <span>Step {Math.min(lesson.steps.indexOf(step) + 1, lesson.steps.length)} / {lesson.steps.length}</span>
+      </div>
+      <h2>{step.title}</h2>
+      <p className="coach-panel__body">{step.body}</p>
+
+      <div className="coach-action">
+        <span className="coach-action__icon"><Crosshair size={16} /></span>
+        <div>
+          <span>Do this in the editor</span>
+          <strong>{step.professionalName ?? step.title}</strong>
+        </div>
+      </div>
+
+      {step.shortcut ? (
+        <div className="coach-shortcut">
+          <Keyboard size={15} />
+          <span>Shortcut</span>
+          <kbd>{step.shortcut}</kbd>
+        </div>
+      ) : null}
+
+      {step.transferNote ? (
+        <div className="coach-transfer">
+          <span>Why this transfers</span>
+          <p>{step.transferNote}</p>
+        </div>
+      ) : null}
+
+      <button className="secondary-button coach-show" type="button" onClick={() => onShowMe(step.target)}>
+        Show me where
+        <MoveRight size={15} />
+      </button>
+
+      <p className="coach-panel__rule">There is no “Next” button. The step completes when you perform the action.</p>
+    </aside>
+  );
+}
