@@ -9,14 +9,21 @@ export interface TimelineClipClickAction {
   split: boolean;
 }
 
+export function snapTimeToFrame(time: number, fps?: number): number {
+  const safeTime = Math.max(0, Number.isFinite(time) ? time : 0);
+  if (!fps || !Number.isFinite(fps) || fps <= 0) return safeTime;
+  return Math.round(safeTime * fps) / fps;
+}
+
 export function timelineClipClickAction(
   activeTool: string,
   clipId: string,
   sequenceTime: number,
+  fps?: number,
 ): TimelineClipClickAction {
   const selectionMode = activeTool === 'selection';
   return {
-    seekTime: sequenceTime,
+    seekTime: snapTimeToFrame(sequenceTime, fps),
     tutorialSeek: true,
     selectClipId: selectionMode ? clipId : null,
     split: !selectionMode,
@@ -92,39 +99,82 @@ export function sequenceTimeAfterEdit(
   return Math.max(0, Math.min(beforeSequenceTime, sequenceDuration(afterClips)));
 }
 
-export function splitClip(clips: Clip[], clipId: string, sourceTime: number): Clip[] {
+export function splitClip(clips: Clip[], clipId: string, sourceTime: number, fps?: number): Clip[] {
   const index = clips.findIndex((clip) => clip.id === clipId);
   if (index < 0) return clips;
 
   const clip = clips[index];
-  if (sourceTime <= clip.sourceStart || sourceTime >= clip.sourceEnd) return clips;
+  const editTime = snapTimeToFrame(sourceTime, fps);
+  if (editTime <= clip.sourceStart || editTime >= clip.sourceEnd) return clips;
 
   const left: Clip = {
     ...clip,
-    id: `${clip.id}-a-${sourceTime.toFixed(3)}`,
-    sourceEnd: sourceTime,
+    id: `${clip.id}-a-${editTime.toFixed(3)}`,
+    sourceEnd: editTime,
   };
   const right: Clip = {
     ...clip,
-    id: `${clip.id}-b-${sourceTime.toFixed(3)}`,
-    sourceStart: sourceTime,
+    id: `${clip.id}-b-${editTime.toFixed(3)}`,
+    sourceStart: editTime,
   };
 
   return [...clips.slice(0, index), left, right, ...clips.slice(index + 1)];
 }
 
-export function trimClip(clips: Clip[], clipId: string, edge: ClipEdge, sourceTime: number): Clip[] {
+export function trimClip(
+  clips: Clip[],
+  clipId: string,
+  edge: ClipEdge,
+  sourceTime: number,
+  fps?: number,
+): Clip[] {
   const index = clips.findIndex((clip) => clip.id === clipId);
   if (index < 0) return clips;
 
   const clip = clips[index];
-  if (sourceTime <= clip.sourceStart || sourceTime >= clip.sourceEnd) return clips;
+  const editTime = snapTimeToFrame(sourceTime, fps);
+  if (editTime <= clip.sourceStart || editTime >= clip.sourceEnd) return clips;
 
   const trimmed: Clip = edge === 'start'
-    ? { ...clip, sourceStart: sourceTime }
-    : { ...clip, sourceEnd: sourceTime };
+    ? { ...clip, sourceStart: editTime }
+    : { ...clip, sourceEnd: editTime };
 
   return clips.map((item, itemIndex) => (itemIndex === index ? trimmed : item));
+}
+
+export function applySourceRange(
+  clips: Clip[],
+  clipId: string,
+  markIn: number,
+  markOut: number,
+  fps?: number,
+): Clip[] {
+  const index = clips.findIndex((clip) => clip.id === clipId);
+  if (index < 0) return clips;
+  const clip = clips[index];
+  const rangeStart = Math.max(clip.sourceStart, snapTimeToFrame(markIn, fps));
+  const rangeEnd = Math.min(clip.sourceEnd, snapTimeToFrame(markOut, fps));
+  if (rangeEnd <= rangeStart) return clips;
+  if (rangeStart === clip.sourceStart && rangeEnd === clip.sourceEnd) return clips;
+  return clips.map((item, itemIndex) => (
+    itemIndex === index ? { ...item, sourceStart: rangeStart, sourceEnd: rangeEnd } : item
+  ));
+}
+
+export function summarizeAudioSamples(samples: Float32Array, bucketCount: number): number[] {
+  const buckets = Math.max(0, Math.floor(bucketCount));
+  if (buckets === 0) return [];
+  if (samples.length === 0) return Array.from({ length: buckets }, () => 0);
+
+  return Array.from({ length: buckets }, (_, bucketIndex) => {
+    const start = Math.floor((bucketIndex * samples.length) / buckets);
+    const end = Math.max(start + 1, Math.floor(((bucketIndex + 1) * samples.length) / buckets));
+    let peak = 0;
+    for (let index = start; index < Math.min(end, samples.length); index += 1) {
+      peak = Math.max(peak, Math.min(1, Math.abs(samples[index])));
+    }
+    return peak;
+  });
 }
 
 export function rippleDeleteClip(clips: Clip[], clipId: string): Clip[] {
