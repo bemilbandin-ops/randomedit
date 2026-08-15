@@ -2,6 +2,7 @@ import { ArrowRight, CheckCircle2, Crosshair } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { TutorialStep } from '../lib/tutorial.ts';
+import './GuidedTutorialOverlay.css';
 
 interface GuidedTutorialOverlayProps {
   step?: TutorialStep;
