@@ -64,6 +64,7 @@ test('moves clips left and right without mutating the input', () => {
   assert.deepEqual(clips.map((clip) => clip.id), ['a', 'b']);
 });
 
+// Regression: tutorial step 2 must count the normal action of clicking a timeline clip.
 test('clicking a timeline clip in selection mode seeks and selects so tutorial step 2 can complete', () => {
   assert.deepEqual(timelineClipClickAction('selection', 'a', 2.25), {
     seekTime: 2.25,
