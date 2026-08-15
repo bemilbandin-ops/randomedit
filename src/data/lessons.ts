@@ -93,8 +93,8 @@ export const lessons: TutorialLesson[] = [
   },
   {
     id: 'mark-range',
-    title: 'Mark a usable range',
-    description: 'Set In and Out points before making edit decisions.',
+    title: 'Mark and use a range',
+    description: 'Set In and Out points, then apply that marked source range to the clip.',
     steps: [
       {
         id: 'mark-in',
@@ -126,6 +126,16 @@ export const lessons: TutorialLesson[] = [
         professionalName: 'Mark Out',
         transferNote: 'O is Mark Out in both Premiere and Resolve.',
       },
+      {
+        id: 'apply-range',
+        title: 'Use the marked range',
+        body: 'Click Use In/Out. The clip under the playhead is trimmed to the source range you just marked.',
+        simpleBody: 'Click the highlighted Use In/Out button. Your marked section becomes the actual usable part of the timeline clip.',
+        requiredEvent: 'range.applied',
+        target: 'apply-range',
+        professionalName: 'Apply Source In / Out',
+        transferNote: 'In and Out points are useful because editors use them to define which part of source media belongs in an edit.',
+      },
     ],
   },
   {
@@ -136,8 +146,8 @@ export const lessons: TutorialLesson[] = [
       {
         id: 'split',
         title: 'Cut the clip in two',
-        body: 'Place the playhead inside the selected clip and use Add Edit / Split Clip.',
-        simpleBody: 'Put the playhead inside the clip, then click the highlighted split control. One clip becomes two pieces at that exact spot.',
+        body: 'Place the playhead inside a clip and use Add Edit / Split Clip. The command cuts the clip under the playhead.',
+        simpleBody: 'Put the playhead inside the clip, then click the highlighted split control. One clip becomes two pieces at that exact frame.',
         term: {
           name: 'Cut / edit point',
           meaning: 'The boundary between two timeline pieces. It does not damage the original video file.',
@@ -168,7 +178,7 @@ export const lessons: TutorialLesson[] = [
       {
         id: 'trim',
         title: 'Trim to the playhead',
-        body: 'Move the playhead inside the selected clip, then trim its start or end to that position.',
+        body: 'Move the playhead inside the selected clip, then trim its start or end to that frame.',
         simpleBody: 'Move the playhead inside the selected piece, then use one of the highlighted trim buttons. Trimming shortens a clip without changing the original file.',
         requiredEvent: 'clip.trimmed',
         target: 'trim-controls',
@@ -195,17 +205,17 @@ export const lessons: TutorialLesson[] = [
   {
     id: 'review-handoff',
     title: 'Review and hand off',
-    description: 'Set delivery preferences and export the editable project plus its EDL handoff.',
+    description: 'Set delivery and source metadata, then export the editable project plus its EDL handoff.',
     steps: [
       {
         id: 'settings',
         title: 'Change one delivery setting',
-        body: 'Open Settings and change playback speed, sequence frame rate, resolution, export fps or format.',
-        simpleBody: 'Open the highlighted Settings button and change any one option. These are the basic choices that control playback and final output.',
+        body: 'Open Settings and change playback speed, sequence frame rate, resolution, export fps, format, or confirm source handoff metadata.',
+        simpleBody: 'Open the highlighted Settings button and change any one option. Source FPS, start timecode and reel metadata are also available for a more useful EDL handoff.',
         requiredEvent: 'settings.changed',
         target: 'settings',
         professionalName: 'Sequence / Deliver Settings',
-        transferNote: 'Frame rate and export settings are separate decisions in professional software too.',
+        transferNote: 'Frame rate, export settings and source timecode metadata are separate decisions in professional software too.',
       },
       {
         id: 'export-project',
@@ -221,7 +231,7 @@ export const lessons: TutorialLesson[] = [
         id: 'export-edl',
         title: 'Download the EDL',
         body: 'Open Export again and download the separate .edl handoff file.',
-        simpleBody: 'Open Export, then click Download .edl. This creates the small text handoff that lists the source and record times for each cut.',
+        simpleBody: 'Open Export, then click Download .edl. This creates the text handoff that lists reel, source timecode and record timecode for each cut.',
         term: {
           name: 'EDL',
           meaning: 'A small text list describing where cuts happen and which source times they use.',
