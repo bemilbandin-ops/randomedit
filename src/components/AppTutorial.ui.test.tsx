@@ -192,6 +192,40 @@ describe('guided tutorial integration', () => {
     expect(onNext).toHaveBeenCalledTimes(1);
   });
 
+  it('does not lock unrelated controls when a tutorial target is missing', async () => {
+    const otherClick = vi.fn();
+    const step: TutorialStep = {
+      id: 'missing-target',
+      title: 'Missing target',
+      body: 'The target is intentionally absent.',
+      requiredEvent: 'test.missing',
+      target: 'not-mounted',
+    };
+
+    await act(async () => {
+      root.render(
+        <>
+          <button type="button" onClick={otherClick}>Still usable</button>
+          <GuidedTutorialOverlay
+            step={step}
+            lessonNumber={1}
+            totalLessons={1}
+            stepNumber={1}
+            totalSteps={1}
+            complete={false}
+            onNext={() => undefined}
+          />
+        </>,
+      );
+    });
+
+    expect(document.querySelector('.guided-card')).toBeNull();
+    const other = Array.from(document.querySelectorAll('button')).find((button) => button.textContent === 'Still usable');
+    expect(other).toBeDefined();
+    await click(other!);
+    expect(otherClick).toHaveBeenCalledTimes(1);
+  });
+
   it('guides Settings inside the modal, closes it on Next, then guides the actual project download', async () => {
     await renderApp({
       lessonIndex: 6,
