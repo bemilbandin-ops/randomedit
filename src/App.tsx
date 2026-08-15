@@ -54,18 +54,6 @@ const INITIAL_PROGRESS: TutorialProgress = {
 
 type DialogName = 'settings' | 'shortcuts' | 'progress' | 'export' | null;
 
-const COMMAND_TUTORIAL_EVENT: Record<string, string> = {
-  playPause: 'transport.played',
-  shuttleForward: 'transport.shuttleForward',
-  frameForward: 'transport.frameStep',
-  markIn: 'mark.in',
-  markOut: 'mark.out',
-  addEdit: 'clip.split',
-  rippleDelete: 'clip.rippleDeleted',
-};
-
-const SAFE_COMMANDS_WHEN_STEP_DONE = new Set(['playPause', 'shuttleStop']);
-
 function getOverlayStep(step: TutorialStep | undefined, openDialog: DialogName): TutorialStep | undefined {
   if (!step) return undefined;
 
@@ -159,7 +147,6 @@ export default function App() {
     : undefined;
   const overlayStep = useMemo(() => getOverlayStep(currentStep, openDialog), [currentStep, openDialog]);
   const courseComplete = progress.completedLessonIds.length === lessons.length;
-  const activeTutorialEvent = currentStep?.requiredEvent ?? null;
   const tutorialStepComplete = Boolean(progress.stepComplete);
 
   const progressPercent = useMemo(() => {
@@ -392,9 +379,12 @@ export default function App() {
   }, [currentSourceTime, emitTutorialEvent]);
 
   const handleMarkOut = useCallback(() => {
-    setMarkOut(currentSourceTime());
-    emitTutorialEvent('mark.out');
-  }, [currentSourceTime, emitTutorialEvent]);
+    const out = currentSourceTime();
+    setMarkOut(out);
+    if (markIn !== null && out > markIn) {
+      emitTutorialEvent('mark.out', { markIn, markOut: out });
+    }
+  }, [currentSourceTime, emitTutorialEvent, markIn]);
 
   const commitClips = useCallback((next: Clip[]) => {
     if (next === clips) return false;
@@ -543,20 +533,12 @@ export default function App() {
       const command = Object.entries(shortcutBindings).find(([, binding]) => binding === shortcut)?.[0];
       if (!command) return;
 
-      if (activeTutorialEvent) {
-        if (tutorialStepComplete) {
-          if (!SAFE_COMMANDS_WHEN_STEP_DONE.has(command)) return;
-        } else if (COMMAND_TUTORIAL_EVENT[command] !== activeTutorialEvent) {
-          return;
-        }
-      }
-
       event.preventDefault();
       dispatchCommand(command);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeTutorialEvent, dispatchCommand, openDialog, shortcutBindings, tutorialStepComplete]);
+  }, [dispatchCommand, openDialog, shortcutBindings]);
 
   const handleShowMe = useCallback((target?: string) => {
     if (!target) return;
