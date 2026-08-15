@@ -114,8 +114,8 @@ export const lessons: TutorialLesson[] = [
       {
         id: 'mark-out',
         title: 'Mark where the useful part ends',
-        body: 'Move later in the clip and press O. The selected source range appears above the timeline.',
-        simpleBody: 'Move later in the clip, then press O. Now you have a start and an end for the part you want.',
+        body: 'Move later in the clip and press O. Out must be later than In.',
+        simpleBody: 'Move later than your In point, then press O. The app only accepts an Out point that makes a real positive-length range.',
         term: {
           name: 'Out point',
           meaning: 'The place where a chosen section ends.',
@@ -195,7 +195,7 @@ export const lessons: TutorialLesson[] = [
   {
     id: 'review-handoff',
     title: 'Review and hand off',
-    description: 'Set delivery preferences and export a portable project for quick review.',
+    description: 'Set delivery preferences and export the editable project plus its EDL handoff.',
     steps: [
       {
         id: 'settings',
@@ -209,16 +209,26 @@ export const lessons: TutorialLesson[] = [
       },
       {
         id: 'export-project',
-        title: 'Export the project',
-        body: 'Download the project package. It contains edit decisions plus an EDL for quick review.',
-        simpleBody: 'Open Export and download the project package. This saves your edit decisions so someone can review the work without guessing what you changed.',
+        title: 'Download the project JSON',
+        body: 'Open Export and download the Random Edit project file. This JSON stores your edit decisions and project settings; the EDL is a separate download in the next step.',
+        simpleBody: 'Open Export and click Download project. This saves the editable project data as JSON. It does not include the EDL file.',
+        requiredEvent: 'project.exported',
+        target: 'export-project',
+        professionalName: 'Project Export',
+        transferNote: 'Project files preserve editable decisions and settings instead of baking them into the source media.',
+      },
+      {
+        id: 'export-edl',
+        title: 'Download the EDL',
+        body: 'Open Export again and download the separate .edl handoff file.',
+        simpleBody: 'Open Export, then click Download .edl. This creates the small text handoff that lists the source and record times for each cut.',
         term: {
           name: 'EDL',
           meaning: 'A small text list describing where cuts happen and which source times they use.',
         },
-        requiredEvent: 'project.exported',
+        requiredEvent: 'edl.exported',
         target: 'export-project',
-        professionalName: 'Project / EDL Export',
+        professionalName: 'EDL Export',
         transferNote: 'EDLs describe source and record timecode instead of baking the edit into the source file.',
       },
     ],
